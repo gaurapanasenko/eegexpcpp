@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <torch/torch.h>
@@ -16,6 +17,10 @@ class TimeMlpImpl : public torch::nn::Module {
               const std::string& activation);
 
   torch::Tensor forward(torch::Tensor x);
+
+  /// Primal forward and forward-mode JVP along the last dim (dX / dZ).
+  std::pair<torch::Tensor, torch::Tensor> forward_jvp(torch::Tensor x,
+                                                      torch::Tensor dx);
 
  private:
   torch::nn::Sequential seq_{nullptr};

@@ -57,8 +57,10 @@ export LD_LIBRARY_PATH=${CMAKE_SOURCE_DIR}/libtorch/lib${LD_LIBRARY_PATH:+:$LD_L
 ./scripts/train_latent_ae_ode.sh
 ```
 
-`scripts/cmake_build.sh` — Ninja, `-j` = усі ядра (`nproc`). Окремий
-таргет: `./scripts/cmake_build.sh --target eegexpcpp_infer`.
+`scripts/cmake_build.sh` — Ninja, `-j` = усі ядра (`nproc`). Після змін
+у `eegexpcpp_model` перезберіть і `eegexpcpp_infer` для Streamlit-admin
+(`--target eegexpcpp_infer`; перезапуск `streamlit run`, інакше старий
+`.so` лишається в процесі).
 
 `CMAKE_PREFIX_PATH` defaults to `${CMAKE_SOURCE_DIR}/libtorch` if that
 directory exists. Requires system **HDF5**; **nlohmann/json** fetched by
@@ -68,7 +70,8 @@ CMake (`FetchContent`, v3.11.3 tarball) on configure.
 
 - **LatentAeOde:** JSON `model.n_latent`; `feature_dim` from HDF5 at
   build time (`ModelConfig` only to construct). `Z = enc(X)` with
-  `Z.shape[-1]=n_latent`; `dZ = JVP(enc,X,dX)`; `dZ_pred = ode(Z)`;
+  `Z.shape[-1]=n_latent`; `dZ` / `dY_pred` via `TimeMlp::forward_jvp`
+  (Linear + gelu/relu/tanh); `dZ_pred = ode(Z)`;
   `dZ_pred = ode(Z)`; `Y,dY_pred = decoder(Z,dZ_pred)` like `enc(X,dX)`.
   Tensors **`[B,T,F]`** (HDF5 `[F,T]` transposed on load).
 - **Train:** AdamW, all hyperparameters in JSON (`configs/`). Resume:

@@ -15,7 +15,12 @@ from eegexpcpp.experiment import (
     h5_metadata,
     list_config_paths,
 )
-from eegexpcpp.infer_native import InferError, InferSession, infer_lib_available
+from eegexpcpp.infer_native import (
+    InferError,
+    InferSession,
+    default_infer_lib,
+    infer_lib_available,
+)
 from eegexpcpp.latent_rollout import chunk_mse, rollout_chunked, rollout_full
 
 os.chdir(ROOT)
@@ -57,6 +62,7 @@ if entry.is_latent_ae_ode:
 
 split = st.sidebar.radio("Дані", ["train", "val", "full"], index=0)
 device = st.sidebar.selectbox("Device (C++)", ["cpu", "cuda"], index=0)
+st.sidebar.caption("Forward на обраному device; RK4 ode_rhs — завжди CPU.")
 
 meta = {}
 if entry.h5_path and entry.h5_group:
@@ -74,9 +80,22 @@ if not entry.is_latent_ae_ode or not entry.checkpoint_exists:
     st.stop()
 
 
+def _infer_lib_stamp() -> str:
+    lib = default_infer_lib()
+    if not lib.is_file():
+        return "missing"
+    return f"{lib}:{lib.stat().st_mtime_ns}"
+
+
 @st.cache_resource
-def load_session(config_path: str, dev: str) -> InferSession:
+def load_session(config_path: str, dev: str, infer_stamp: str) -> InferSession:
     return InferSession(config_path, device=dev)
+
+
+@st.cache_resource
+def load_ode_session(config_path: str, infer_stamp: str) -> InferSession:
+    """CPU-only session for RK4 (many small ode_rhs calls)."""
+    return InferSession(config_path, device="cpu")
 
 
 @st.cache_data(show_spinner="Forward + RK4…")
@@ -88,11 +107,13 @@ def compute_arrays(
     chunk_n: int,
 ) -> dict[str, np.ndarray | float | int]:
     dt_local = 1.0 / fs_hz
-    session = load_session(config_path, dev)
+    stamp = _infer_lib_stamp()
+    session = load_session(config_path, dev, stamp)
+    ode_session = session if dev == "cpu" else load_ode_session(config_path, stamp)
     out = session.forward(split_name)
     z = out["z"]
-    z_full = rollout_full(z, session, dt_local)
-    z_chunk = rollout_chunked(z, session, dt_local, chunk_n)
+    z_full = rollout_full(z, ode_session, dt_local)
+    z_chunk = rollout_chunked(z, ode_session, dt_local, chunk_n)
     return {
             "x": out["x"],
             "y": out["y"],
@@ -108,7 +129,15 @@ try:
         str(entry.path), device, split, fs, chunk_samples
     )
 except InferError as exc:
-    st.error(str(exc))
+    msg = str(exc)
+    st.error(msg)
+    if "Nested forward mode AD" in msg:
+        st.info(
+            "Ймовірно застарілий `build/libeegexpcpp_infer.so` (після змін C++ "
+            "зберіть `./scripts/cmake_build.sh --target eegexpcpp_infer` і "
+            "**перезапустіть** Streamlit — ctypes не підвантажує новий .so "
+            "у вже запущеному процесі."
+        )
     st.stop()
 
 st.caption(f"next_epoch={data['next_epoch']} | split={split} | T={data['x'].shape[0]}")
@@ -150,7 +179,7 @@ with tab_rec:
         yaxis_title="амплітуда",
         height=450,
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 with tab_3d:
     if z_dim < 3:
@@ -170,7 +199,7 @@ with tab_3d:
             scene=dict(xaxis_title="z0", yaxis_title="z1", zaxis_title="z2"),
             height=550,
         )
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, width="stretch")
 
 with tab_rk4:
     dims = min(3, z_dim)
@@ -199,7 +228,7 @@ with tab_rk4:
         xaxis_title="час (с)",
         height=450,
     )
-    st.plotly_chart(fig_r, use_container_width=True)
+    st.plotly_chart(fig_r, width="stretch")
 
 with tab_chunk:
     z_chunk = data["z_chunk"]
@@ -229,9 +258,9 @@ with tab_chunk:
         xaxis_title="час (с)",
         height=450,
     )
-    st.plotly_chart(fig_c, use_container_width=True)
+    st.plotly_chart(fig_c, width="stretch")
     st.dataframe(
         {"chunk": range(len(mses)), "mse": mses},
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )

@@ -1,7 +1,5 @@
 #include "eegexpcpp/encoder.hpp"
 
-#include "eegexpcpp/jvp.hpp"
-
 namespace eegexpcpp {
 
 EncoderImpl::EncoderImpl(int64_t feature_dim,
@@ -19,8 +17,7 @@ torch::Tensor EncoderImpl::encode(torch::Tensor x) {
 std::pair<torch::Tensor, torch::Tensor> EncoderImpl::forward(
     torch::Tensor x,
     torch::Tensor dx_dt) {
-  auto enc_fn = [this](const at::Tensor& xin) { return encode(xin); };
-  return jvp(enc_fn, x, dx_dt);
+  return net_->forward_jvp(std::move(x), std::move(dx_dt));
 }
 
 }  // namespace eegexpcpp

@@ -17,7 +17,11 @@ def rollout_full(
     session: InferSession,
     dt: float,
 ) -> np.ndarray:
-    """Integrate ode(z) from z_true[0] for T steps (same length as z_true)."""
+    """Integrate ode(z) from z_true[0] for T steps (same length as z_true).
+
+    Pass a CPU ``InferSession`` when the main forward uses CUDA (many
+    small ``ode_rhs`` calls).
+    """
     t_len = z_true.shape[0]
     u0 = np.ascontiguousarray(z_true[0:1], dtype=np.float32)
 

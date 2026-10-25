@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-10-25
+
+### Changed
+
+- `TimeMlp::forward_jvp`: analytic JVP for Linear + gelu/relu/tanh;
+  encoder/decoder use it instead of forward-mode autograd `jvp()`
+- Streamlit admin: RK4 `ode_rhs` on CPU when forward uses CUDA;
+  infer session cache keyed by `libeegexpcpp_infer.so` mtime; Plotly
+  `width="stretch"`
+- Infer: `dx` on same device as `x`; `model->to(device)` after
+  checkpoint load
+
+### Fixed
+
+- CUDA infer forward when `dX` tensors stayed on CPU in the JVP path
+
 ## [0.3.0] - 2026-10-25
 
 ### Changed

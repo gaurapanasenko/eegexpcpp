@@ -150,6 +150,7 @@ EegexpcppInferHandle* eegexpcpp_infer_create(const char* config_json_path,
       return nullptr;
     }
     s.next_epoch = resume.next_epoch;
+    s.model->to(s.device);
     s.model->eval();
 
     return session.release();
@@ -226,7 +227,7 @@ int eegexpcpp_infer_forward(const EegexpcppInferHandle* handle,
     auto& s = *handle->impl;
     auto [x, dx] = select_split(s, split);
     x = x.to(s.device);
-    dx = dx.to(s.device);
+    dx = dx.to(x.device(), x.scalar_type());
 
     torch::NoGradGuard no_grad;
     const auto out = s.model->forward(x, dx);

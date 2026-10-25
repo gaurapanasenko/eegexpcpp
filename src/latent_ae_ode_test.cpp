@@ -16,6 +16,7 @@
 #include "eegexpcpp/encoder.hpp"
 #include "eegexpcpp/jvp.hpp"
 #include "eegexpcpp/latent_ae_ode.hpp"
+#include "eegexpcpp/mlp.hpp"
 
 namespace {
 
@@ -147,6 +148,27 @@ void test_latent_forward_loss_grad() {
               "J_z_1 equals mse at t=0");
 }
 
+void test_timemlp_jvp_activations() {
+  torch::manual_seed(3);
+  const int64_t b = 2;
+  const int64_t t = 5;
+  const int64_t in_f = 4;
+  const int64_t out_f = 3;
+  const std::vector<int64_t> hid{6};
+  const char* acts[] = {"gelu", "relu", "tanh"};
+  for (const char* act : acts) {
+    eegexpcpp::TimeMlp mlp(in_f, hid, out_f, act);
+    auto x = torch::randn({b, t, in_f});
+    auto dx = torch::randn({b, t, in_f});
+    auto [y, dy] = mlp->forward_jvp(x, dx);
+    check(y.sizes() == torch::IntArrayRef({b, t, out_f}), act);
+    check_close(y, mlp->forward(x), 1e-6, 1e-7, "TimeMlp primal");
+    auto mlp_fn = [&](const at::Tensor& xin) { return mlp->forward(xin); };
+    auto ref = eegexpcpp::jvp(mlp_fn, x, dx).second;
+    check_close(dy, ref, 1e-5, 1e-6, act);
+  }
+}
+
 void test_decoder_jvp_chain() {
   torch::manual_seed(2);
   const int64_t b = 1;
@@ -179,6 +201,24 @@ void test_h5_loader() {
   std::filesystem::remove(path);
 }
 
+void test_encoder_jvp_cuda_dx_on_cpu() {
+  if (!torch::cuda::is_available()) {
+    return;
+  }
+  torch::manual_seed(4);
+  const int64_t b = 1;
+  const int64_t t = 4;
+  const int64_t f = 3;
+  const int64_t l = 2;
+  eegexpcpp::Encoder enc(f, l, std::vector<int64_t>{5}, "gelu");
+  enc->to(torch::kCUDA);
+  auto x = torch::randn({b, t, f}, torch::TensorOptions().device(torch::kCUDA));
+  auto dx = torch::randn({b, t, f});
+  auto [z, dz] = enc->forward(x, dx);
+  check(z.device().is_cuda(), "encoder Z on cuda");
+  check(dz.device().is_cuda(), "encoder dZ on cuda");
+}
+
 void test_config_json() {
   const auto path = std::filesystem::path(__FILE__).parent_path().parent_path() /
                     "configs" / "latent_ae_ode.lorenz.json";
@@ -193,6 +233,8 @@ void test_config_json() {
 int main() {
   try {
     test_encoder_jvp();
+    test_timemlp_jvp_activations();
+    test_encoder_jvp_cuda_dx_on_cpu();
     test_decoder_jvp_chain();
     test_latent_forward_loss_grad();
     test_h5_loader();
