@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] - 2026-10-25
+
+### Added
+
+- JSON `model.ode` with `type` `nn` or `sindy`; SINDy stacks `poly` and
+  `fourier` libraries (PySINDy-style defaults) into `Theta @ Xi`.
+- `SindyFeatureLibrary`: prebuilt feature names and column evaluators;
+  `eegexpcpp_sindy_csv` and infer `eegexpcpp_infer_sindy_csv`; Python
+  parses CSV into a table; Streamlit tab «SINDy Xi». SINDy `Xi`
+  initialized to zero at model creation.
+
+### Changed
+
+- Removed top-level `model.ode_hidden` / `model.ode_activation`; use
+  `model.ode.hidden` / `model.ode.activation` for `nn`.
+
 ## [0.5.0] - 2026-10-25
 
 ### Added

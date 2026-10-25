@@ -14,14 +14,46 @@ struct DataConfig {
   double train_fraction = 0.9;
 };
 
+enum class OdeType { Nn, Sindy };
+
+struct OdeNnConfig {
+  std::vector<int64_t> hidden{32, 32};
+  std::string activation = "tanh";
+};
+
+struct PolyLibraryConfig {
+  int degree = 2;
+  bool include_interaction = true;
+  bool interaction_only = false;
+  bool include_bias = true;
+};
+
+struct FourierLibraryConfig {
+  int n_frequencies = 1;
+  bool include_sin = true;
+  bool include_cos = true;
+};
+
+struct SindyLibraryConfig {
+  enum class Kind { Poly, Fourier };
+  Kind kind = Kind::Poly;
+  PolyLibraryConfig poly;
+  FourierLibraryConfig fourier;
+};
+
+struct OdeConfig {
+  OdeType type = OdeType::Nn;
+  OdeNnConfig nn;
+  std::vector<SindyLibraryConfig> libraries;
+};
+
 struct ModelConfig {
   /// Latent dim Z; feature_dim is set from HDF5 before building the model.
   int64_t n_latent = 12;
   int64_t feature_dim = 0;
   std::vector<int64_t> encoder_hidden{256, 256};
   std::string encoder_activation = "gelu";
-  std::vector<int64_t> ode_hidden{32, 32};
-  std::string ode_activation = "tanh";
+  OdeConfig ode;
   std::vector<int64_t> decoder_hidden{256, 256};
   std::string decoder_activation = "gelu";
 };

@@ -8,8 +8,11 @@
     "n_latent": 12,
     "encoder_hidden": [256, 256],
     "encoder_activation": "gelu",
-    "ode_hidden": [128, 128],
-    "ode_activation": "tanh",
+    "ode": {
+      "type": "nn",
+      "hidden": [128, 128],
+      "activation": "tanh"
+    },
     "decoder_hidden": [256, 256],
     "decoder_activation": "gelu"
   },

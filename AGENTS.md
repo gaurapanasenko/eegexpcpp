@@ -72,7 +72,11 @@ CMake (`FetchContent`, v3.11.3 tarball) on configure.
   build time (`ModelConfig` only to construct). `Z = enc(X)` with
   `Z.shape[-1]=n_latent`; `dZ` / `dY_pred` via `TimeMlp::forward_jvp`
   (Linear + gelu/relu/tanh); `dZ_pred = ode(Z)`;
-  `dZ_pred = ode(Z)`; `Y,dY_pred = decoder(Z,dZ_pred)` like `enc(X,dX)`.
+  `Y,dY_pred = decoder(Z,dZ_pred)` like `enc(X,dX)`. JSON **`model.ode`**:
+  **`type`** `nn` (`hidden`, `activation`) or **`sindy`** (`libraries[]`
+  with `poly` / `fourier` terms; `dZ = Theta(Z) @ Xi`, AdamW + `lambda_l1`,
+  no STLSQ yet). SINDy export: `eegexpcpp_sindy_csv`, infer
+  infer `sindy_csv` → Python `csv` parse; admin tab «SINDy Xi».
   Tensors **`[B,T,F]`** (HDF5 `[F,T]` transposed on load).
 - **Train:** AdamW, all hyperparameters in JSON (`configs/`). Resume:
   train `[next_epoch, next_epoch + epochs)`; log `epoch=` is cumulative;

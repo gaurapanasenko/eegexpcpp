@@ -4,6 +4,7 @@
 #include <cstring>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include <ATen/Parallel.h>
@@ -14,6 +15,7 @@
 #include "eegexpcpp/dataset_h5.hpp"
 #include "eegexpcpp/latent_ae_ode.hpp"
 #include "eegexpcpp/rk4.hpp"
+#include "eegexpcpp/sindy_table.hpp"
 
 namespace {
 
@@ -52,7 +54,16 @@ struct InferSessionImpl {
   int64_t next_epoch = -1;
   torch::Tensor z_ode;
   torch::Tensor dz_ode;
+  std::optional<std::string> cached_sindy_csv;
 };
+
+const std::string& ensure_sindy_csv(InferSessionImpl& s) {
+  if (!s.cached_sindy_csv.has_value()) {
+    s.cached_sindy_csv = eegexpcpp::sindy_coefficients_csv_string(
+        s.model, s.cfg.model);
+  }
+  return *s.cached_sindy_csv;
+}
 
 struct AtThreadSingleGuard {
   int intra = 1;
@@ -362,6 +373,62 @@ int eegexpcpp_infer_rk4_latent(const EegexpcppInferHandle* handle,
   } catch (const c10::Error& e) {
     set_error(e.what());
     return -1;
+  } catch (const std::exception& e) {
+    set_error(e.what());
+    return -1;
+  }
+}
+
+int eegexpcpp_infer_ode_is_sindy(const EegexpcppInferHandle* handle) {
+  if (handle == nullptr || handle->impl == nullptr) {
+    return 0;
+  }
+  return eegexpcpp::model_ode_is_sindy(handle->impl->cfg.model) ? 1 : 0;
+}
+
+int64_t eegexpcpp_infer_sindy_csv_size(
+    const EegexpcppInferHandle* handle) {
+  clear_error();
+  if (handle == nullptr || handle->impl == nullptr) {
+    set_error("null handle");
+    return -1;
+  }
+  if (!eegexpcpp::model_ode_is_sindy(handle->impl->cfg.model)) {
+    return 0;
+  }
+  try {
+    const std::string& csv = ensure_sindy_csv(*handle->impl);
+    return static_cast<int64_t>(csv.size() + 1);
+  } catch (const std::exception& e) {
+    set_error(e.what());
+    return -1;
+  }
+}
+
+int eegexpcpp_infer_sindy_csv(const EegexpcppInferHandle* handle,
+                              char* buf,
+                              int64_t buf_len) {
+  clear_error();
+  if (handle == nullptr || handle->impl == nullptr) {
+    set_error("null handle");
+    return -1;
+  }
+  if (buf == nullptr || buf_len < 1) {
+    set_error("invalid csv buffer");
+    return -1;
+  }
+  if (!eegexpcpp::model_ode_is_sindy(handle->impl->cfg.model)) {
+    set_error("model ode is not sindy");
+    return -1;
+  }
+  try {
+    const std::string& csv = ensure_sindy_csv(*handle->impl);
+    if (buf_len < static_cast<int64_t>(csv.size() + 1)) {
+      set_error("csv buffer too small");
+      return -1;
+    }
+    std::memcpy(buf, csv.c_str(), csv.size() + 1);
+    return 0;
   } catch (const std::exception& e) {
     set_error(e.what());
     return -1;

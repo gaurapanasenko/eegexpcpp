@@ -1,0 +1,45 @@
+{
+  "data": {
+    "h5_path": "data/lorenz.h5",
+    "h5_group": "0",
+    "train_fraction": 0.9
+  },
+  "model": {
+    "n_latent": 3,
+    "encoder_hidden": [64, 32],
+    "encoder_activation": "gelu",
+    "ode": {
+      "type": "sindy",
+      "libraries": [
+        {
+          "type": "poly",
+          "degree": 2,
+          "include_interaction": true,
+          "interaction_only": false,
+          "include_bias": true
+        }
+      ]
+    },
+    "decoder_hidden": [32, 64],
+    "decoder_activation": "gelu"
+  },
+  "loss": {
+    "lambda_Y": 1.0,
+    "lambda_dY": 0.01,
+    "lambda_dZ": 0.1,
+    "lambda_z1": 1.0,
+    "lambda_l1": 1.0e-5
+  },
+  "train": {
+    "epochs": 10000,
+    "lr": 0.00001,
+    "weight_decay": 0.01,
+    "adamw_betas": [0.9, 0.999],
+    "adamw_eps": 1.0e-8,
+    "grad_clip_norm": 0.0,
+    "device": "cuda",
+    "seed": 42,
+    "log_every": 5,
+    "checkpoint_dir": "checkpoints/latent_ae_ode_lorenz_sindy"
+  }
+}

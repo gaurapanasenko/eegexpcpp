@@ -37,6 +37,8 @@ class LatentAeOdeImpl : public torch::nn::Module {
 
   torch::Tensor ode_forward(torch::Tensor z);
 
+  const Ode& ode_module() const { return ode_; }
+
  private:
   int64_t n_latent_{0};
   Encoder encoder_{nullptr};

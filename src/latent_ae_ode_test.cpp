@@ -17,6 +17,10 @@
 #include "eegexpcpp/jvp.hpp"
 #include "eegexpcpp/latent_ae_ode.hpp"
 #include "eegexpcpp/mlp.hpp"
+#include "eegexpcpp/ode.hpp"
+#include "eegexpcpp/ode_sindy.hpp"
+#include "eegexpcpp/sindy_library.hpp"
+#include "eegexpcpp/sindy_table.hpp"
 
 namespace {
 
@@ -109,7 +113,7 @@ TEST_CASE("latent forward loss grad") {
   mcfg.feature_dim = f;
   mcfg.encoder_hidden = std::vector<int64_t>{16};
   mcfg.decoder_hidden = std::vector<int64_t>{16};
-  mcfg.ode_hidden = std::vector<int64_t>{8};
+  mcfg.ode.nn.hidden = std::vector<int64_t>{8};
   eegexpcpp::LatentAeOde model(mcfg);
   auto x = torch::randn({b, t, f}, torch::requires_grad());
   auto dx = torch::randn({b, t, f});
@@ -208,6 +212,104 @@ TEST_CASE("encoder jvp cuda dx on cpu") {
   auto [z, dz] = enc->forward(x, dx);
   CHECK(z.device().is_cuda());
   CHECK(dz.device().is_cuda());
+}
+
+TEST_CASE("sindy feature library names") {
+  eegexpcpp::SindyLibraryConfig poly;
+  poly.kind = eegexpcpp::SindyLibraryConfig::Kind::Poly;
+  poly.poly.degree = 1;
+  eegexpcpp::SindyFeatureLibrary lib(2, {poly});
+  CHECK(lib.size() == 3);
+  const auto& names = lib.feature_names();
+  CHECK(names[0] == "1");
+  CHECK(names[1] == "x0");
+  CHECK(names[2] == "x1");
+}
+
+TEST_CASE("sindy poly feature count") {
+  eegexpcpp::PolyLibraryConfig poly;
+  CHECK(eegexpcpp::poly_feature_count(2, poly) == 6);
+  poly.include_interaction = false;
+  CHECK(eegexpcpp::poly_feature_count(2, poly) == 5);
+  poly.interaction_only = true;
+  poly.include_interaction = true;
+  poly.degree = 2;
+  CHECK(eegexpcpp::poly_feature_count(3, poly) == 7);
+}
+
+TEST_CASE("sindy ode forward") {
+  torch::manual_seed(5);
+  const int64_t b = 1;
+  const int64_t t = 4;
+  const int64_t l = 2;
+  eegexpcpp::OdeConfig ocfg;
+  ocfg.type = eegexpcpp::OdeType::Sindy;
+  eegexpcpp::SindyLibraryConfig poly;
+  poly.kind = eegexpcpp::SindyLibraryConfig::Kind::Poly;
+  poly.poly.degree = 1;
+  ocfg.libraries.push_back(poly);
+  eegexpcpp::Ode ode(l, ocfg);
+  auto z = torch::randn({b, t, l});
+  auto dz = ode->forward(z);
+  CHECK(dz.sizes() == torch::IntArrayRef({b, t, l}));
+  const int64_t f = eegexpcpp::poly_feature_count(l, poly.poly);
+  CHECK(f == 3);
+}
+
+TEST_CASE("latent forward sindy") {
+  torch::manual_seed(6);
+  const int64_t b = 1;
+  const int64_t t = 5;
+  const int64_t f = 4;
+  const int64_t l = 2;
+  eegexpcpp::ModelConfig mcfg;
+  mcfg.n_latent = l;
+  mcfg.feature_dim = f;
+  mcfg.encoder_hidden = std::vector<int64_t>{8};
+  mcfg.decoder_hidden = std::vector<int64_t>{8};
+  mcfg.ode.type = eegexpcpp::OdeType::Sindy;
+  eegexpcpp::SindyLibraryConfig flib;
+  flib.kind = eegexpcpp::SindyLibraryConfig::Kind::Fourier;
+  mcfg.ode.libraries.push_back(flib);
+  eegexpcpp::LatentAeOde model(mcfg);
+  auto x = torch::randn({b, t, f});
+  auto dx = torch::randn({b, t, f});
+  auto out = model->forward(x, dx);
+  CHECK(out.dz_pred.sizes() == torch::IntArrayRef({b, t, l}));
+  eegexpcpp::LossConfig lcfg;
+  auto total = model->total_loss(model->compute_losses(out, x, dx, lcfg), lcfg);
+  CHECK(std::isfinite(total.item<double>()));
+}
+
+TEST_CASE("sindy xi starts at zero") {
+  eegexpcpp::OdeConfig ocfg;
+  ocfg.type = eegexpcpp::OdeType::Sindy;
+  eegexpcpp::SindyLibraryConfig poly;
+  poly.kind = eegexpcpp::SindyLibraryConfig::Kind::Poly;
+  poly.poly.degree = 1;
+  ocfg.libraries.push_back(poly);
+  eegexpcpp::OdeSindy sindy(2, ocfg.libraries);
+  CHECK(torch::allclose(sindy->xi_matrix(), torch::zeros({3, 2})));
+}
+
+TEST_CASE("sindy coefficients table") {
+  torch::manual_seed(7);
+  eegexpcpp::ModelConfig mcfg;
+  mcfg.n_latent = 2;
+  mcfg.feature_dim = 3;
+  mcfg.encoder_hidden = std::vector<int64_t>{4};
+  mcfg.decoder_hidden = std::vector<int64_t>{4};
+  mcfg.ode.type = eegexpcpp::OdeType::Sindy;
+  eegexpcpp::SindyLibraryConfig poly;
+  poly.kind = eegexpcpp::SindyLibraryConfig::Kind::Poly;
+  poly.poly.degree = 1;
+  mcfg.ode.libraries.push_back(poly);
+  eegexpcpp::LatentAeOde model(mcfg);
+  const auto table =
+      eegexpcpp::build_sindy_coefficients_table(model, mcfg);
+  CHECK(table.features.size() == 3);
+  CHECK(table.latent_labels.size() == 2);
+  CHECK(table.xi.size() == 6);
 }
 
 TEST_CASE("config json") {

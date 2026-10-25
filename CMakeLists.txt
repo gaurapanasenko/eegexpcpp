@@ -51,6 +51,9 @@ add_library(
   src/config.cpp
   src/encoder.cpp
   src/ode.cpp
+  src/ode_sindy.cpp
+  src/sindy_library.cpp
+  src/sindy_table.cpp
   src/decoder.cpp
   src/latent_ae_ode.cpp
   src/checkpoint.cpp
@@ -74,6 +77,10 @@ set_target_properties(eegexpcpp_model PROPERTIES POSITION_INDEPENDENT_CODE ON)
 add_executable(eegexpcpp src/main.cpp)
 target_link_libraries(eegexpcpp PRIVATE eegexpcpp_model)
 target_compile_options(eegexpcpp PRIVATE ${TORCH_CXX_FLAGS})
+
+add_executable(eegexpcpp_sindy_csv src/sindy_csv_main.cpp)
+target_link_libraries(eegexpcpp_sindy_csv PRIVATE eegexpcpp_model)
+target_compile_options(eegexpcpp_sindy_csv PRIVATE ${TORCH_CXX_FLAGS})
 
 add_executable(eegexpcpp_train src/train_main.cpp)
 target_link_libraries(eegexpcpp_train PRIVATE eegexpcpp_model)

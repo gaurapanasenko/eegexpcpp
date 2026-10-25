@@ -61,6 +61,19 @@ int eegexpcpp_infer_rk4_latent(const EegexpcppInferHandle* handle,
                                const float* z0,
                                float* z_out);
 
+/// 1 if model.ode.type is sindy, else 0.
+int eegexpcpp_infer_ode_is_sindy(const EegexpcppInferHandle* handle);
+
+/// UTF-8 CSV byte count including trailing '\\0'; 0 if not sindy; -1 on error.
+int64_t eegexpcpp_infer_sindy_csv_size(
+    const EegexpcppInferHandle* handle);
+
+/// Write SINDy Xi CSV (same as eegexpcpp_sindy_csv). buf_len must be >= size
+/// from eegexpcpp_infer_sindy_csv_size. Returns 0 on success.
+int eegexpcpp_infer_sindy_csv(const EegexpcppInferHandle* handle,
+                              char* buf,
+                              int64_t buf_len);
+
 #ifdef __cplusplus
 }
 #endif

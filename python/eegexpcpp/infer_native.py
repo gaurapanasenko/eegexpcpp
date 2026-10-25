@@ -3,15 +3,7 @@
 from __future__ import annotations
 
 import os
-from ctypes import (
-    CDLL,
-    POINTER,
-    c_char_p,
-    c_float,
-    c_int,
-    c_int64,
-    c_void_p,
-)
+from ctypes import CDLL, POINTER, c_char, c_char_p, c_float, c_int, c_int64, c_void_p
 from pathlib import Path
 from typing import Literal
 
@@ -100,6 +92,16 @@ class InferSession:
             POINTER(c_float),
         ]
         lib.eegexpcpp_infer_rk4_latent.restype = c_int
+        lib.eegexpcpp_infer_ode_is_sindy.argtypes = [c_void_p]
+        lib.eegexpcpp_infer_ode_is_sindy.restype = c_int
+        lib.eegexpcpp_infer_sindy_csv_size.argtypes = [c_void_p]
+        lib.eegexpcpp_infer_sindy_csv_size.restype = c_int64
+        lib.eegexpcpp_infer_sindy_csv.argtypes = [
+            c_void_p,
+            POINTER(c_char),
+            c_int64,
+        ]
+        lib.eegexpcpp_infer_sindy_csv.restype = c_int
 
         cfg = str(Path(config_path).resolve())
         ckpt = (
@@ -175,6 +177,20 @@ class InferSession:
             "dz": dz.reshape(shape_z),
             "dz_pred": dz_pred.reshape(shape_z),
         }
+
+    def ode_is_sindy(self) -> bool:
+        assert self._handle is not None
+        return self._lib.eegexpcpp_infer_ode_is_sindy(self._handle) != 0
+
+    def sindy_coefficients_csv(self) -> str:
+        from eegexpcpp.sindy_table import sindy_coefficients_csv
+
+        return sindy_coefficients_csv(self)
+
+    def sindy_coefficients_table(self) -> dict[str, list[float | str]]:
+        from eegexpcpp.sindy_table import sindy_coefficients_table
+
+        return sindy_coefficients_table(self)
 
     def ode_rhs(self, z: np.ndarray) -> np.ndarray:
         assert self._handle is not None

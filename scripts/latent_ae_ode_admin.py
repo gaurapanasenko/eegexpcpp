@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -202,9 +203,16 @@ def _latent_3d_figure(
     return fig
 
 
-tab_rec, tab_3d, tab_rk4, tab_chunk = st.tabs(
-    ["Реконструкція", "Латент 3D", "RK4 (повний)", "RK4 (шматки)"]
-)
+with entry.path.open(encoding="utf-8") as cfg_f:
+    _ode_type = json.load(cfg_f).get("model", {}).get("ode", {}).get("type", "nn")
+_is_sindy = _ode_type == "sindy"
+
+_tab_labels = ["Реконструкція", "Латент 3D", "RK4 (повний)", "RK4 (шматки)"]
+if _is_sindy:
+    _tab_labels.append("SINDy Xi")
+_tabs = st.tabs(_tab_labels)
+tab_rec, tab_3d, tab_rk4, tab_chunk = _tabs[:4]
+tab_sindy = _tabs[4] if _is_sindy else None
 
 with tab_rec:
     fig = go.Figure()
@@ -306,3 +314,13 @@ with tab_chunk:
         width="stretch",
         hide_index=True,
     )
+
+if tab_sindy is not None:
+    with tab_sindy:
+        try:
+            sindy_session = load_session(str(entry.path), device, _infer_lib_stamp())
+            xi_table = sindy_session.sindy_coefficients_table()
+            st.caption("Коефіцієнти Xi: dZ = Theta(Z) @ Xi (рядок — ознака бібліотеки).")
+            st.dataframe(xi_table, width="stretch", hide_index=True)
+        except (InferError, ValueError) as exc:
+            st.error(str(exc))

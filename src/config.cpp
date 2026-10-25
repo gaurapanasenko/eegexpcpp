@@ -40,11 +40,48 @@ ExperimentConfig load_config(const std::string& path) {
   }
   cfg.model.encoder_activation =
       jm.value("encoder_activation", cfg.model.encoder_activation);
-  if (jm.contains("ode_hidden")) {
-    cfg.model.ode_hidden = read_int64_array(jm, "ode_hidden");
+  const auto& jo = jm.at("ode");
+  const std::string ode_type = jo.at("type").get<std::string>();
+  if (ode_type == "nn") {
+    cfg.model.ode.type = OdeType::Nn;
+    if (jo.contains("hidden")) {
+      cfg.model.ode.nn.hidden = read_int64_array(jo, "hidden");
+    }
+    cfg.model.ode.nn.activation =
+        jo.value("activation", cfg.model.ode.nn.activation);
+  } else if (ode_type == "sindy") {
+    cfg.model.ode.type = OdeType::Sindy;
+    for (const auto& jl : jo.at("libraries")) {
+      SindyLibraryConfig lib;
+      const std::string lib_type = jl.at("type").get<std::string>();
+      if (lib_type == "poly") {
+        lib.kind = SindyLibraryConfig::Kind::Poly;
+        lib.poly.degree = jl.value("degree", lib.poly.degree);
+        lib.poly.include_interaction =
+            jl.value("include_interaction", lib.poly.include_interaction);
+        lib.poly.interaction_only =
+            jl.value("interaction_only", lib.poly.interaction_only);
+        lib.poly.include_bias =
+            jl.value("include_bias", lib.poly.include_bias);
+      } else if (lib_type == "fourier") {
+        lib.kind = SindyLibraryConfig::Kind::Fourier;
+        lib.fourier.n_frequencies =
+            jl.value("n_frequencies", lib.fourier.n_frequencies);
+        lib.fourier.include_sin =
+            jl.value("include_sin", lib.fourier.include_sin);
+        lib.fourier.include_cos =
+            jl.value("include_cos", lib.fourier.include_cos);
+      } else {
+        throw std::runtime_error("unknown sindy library type: " + lib_type);
+      }
+      cfg.model.ode.libraries.push_back(lib);
+    }
+    if (cfg.model.ode.libraries.empty()) {
+      throw std::runtime_error("sindy ode requires non-empty libraries");
+    }
+  } else {
+    throw std::runtime_error("unknown ode type: " + ode_type);
   }
-  cfg.model.ode_activation =
-      jm.value("ode_activation", cfg.model.ode_activation);
   if (jm.contains("decoder_hidden")) {
     cfg.model.decoder_hidden = read_int64_array(jm, "decoder_hidden");
   }

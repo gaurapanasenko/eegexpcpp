@@ -4,6 +4,8 @@
 #include <sstream>
 #include <stdexcept>
 
+#include "eegexpcpp/sindy_library.hpp"
+
 namespace eegexpcpp {
 
 namespace {
@@ -18,7 +20,7 @@ LatentAeOdeImpl::LatentAeOdeImpl(const ModelConfig& model_cfg)
     : n_latent_(model_cfg.n_latent),
       encoder_(model_cfg.feature_dim, model_cfg.n_latent,
                model_cfg.encoder_hidden, model_cfg.encoder_activation),
-      ode_(model_cfg.n_latent, model_cfg.ode_hidden, model_cfg.ode_activation),
+      ode_(model_cfg.n_latent, model_cfg.ode),
       decoder_(model_cfg.n_latent, model_cfg.feature_dim,
                model_cfg.decoder_hidden, model_cfg.decoder_activation) {
   if (model_cfg.feature_dim <= 0) {
@@ -53,7 +55,8 @@ std::map<std::string, torch::Tensor> LatentAeOdeImpl::compute_losses(
   const auto z0 = out.z.select(1, 0);
   const int64_t n = std::min(n_latent_, x0.size(-1));
   losses["J_z_1"] = mse_mean(z0, x0.narrow(-1, 0, n));
-  losses["J_reg_ae_l1"] = l1_mean_abs(*encoder_) + l1_mean_abs(*decoder_);
+  losses["J_reg_ae_l1"] =
+      l1_mean_abs(*encoder_) + l1_mean_abs(*decoder_) + l1_mean_abs(*ode_);
   return losses;
 }
 
@@ -119,8 +122,15 @@ void print_latent_ae_ode_summary(const LatentAeOde& model,
   os << "  encoder: "
      << format_mlp_stack(f, cfg.encoder_hidden, l, cfg.encoder_activation)
      << '\n';
-  os << "  ode:     "
-     << format_mlp_stack(l, cfg.ode_hidden, l, cfg.ode_activation) << '\n';
+  if (cfg.ode.type == OdeType::Nn) {
+    os << "  ode:     nn "
+       << format_mlp_stack(l, cfg.ode.nn.hidden, l, cfg.ode.nn.activation)
+       << '\n';
+  } else {
+    const int64_t n_feat = sindy_total_feature_count(l, cfg.ode.libraries);
+    os << "  ode:     sindy libraries=" << cfg.ode.libraries.size()
+       << " features=" << n_feat << " -> " << l << '\n';
+  }
   os << "  decoder: "
      << format_mlp_stack(l, cfg.decoder_hidden, f, cfg.decoder_activation)
      << '\n';
