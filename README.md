@@ -1,7 +1,7 @@
 # eegexpcpp
 
 EEG signal processing and embedding experiments: NumPy/Python
-pipelines plus a small C++/LibTorch binary skeleton.
+pipelines plus C++/LibTorch training for a latent AE+ODE model.
 
 ## Features
 
@@ -16,6 +16,7 @@ pipelines plus a small C++/LibTorch binary skeleton.
 - [uv](https://github.com/astral-sh/uv) (recommended)
 - C++20 toolchain and CMake 3.18+ (optional C++ target)
 - LibTorch C++ distribution extracted to `./libtorch` (gitignored)
+- HDF5 C library (e.g. Arch `hdf5`)
 
 ## Python
 
@@ -46,12 +47,15 @@ component before embedding.
 ## C++
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-LD_LIBRARY_PATH=./libtorch/lib ./build/eegexpcpp
+./scripts/cmake_build.sh
+export LD_LIBRARY_PATH=./libtorch/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+./build/eegexpcpp_train configs/latent_ae_ode.lorenz.json
+# or: ./scripts/train_latent_ae_ode.sh --list
+#     ./scripts/train_latent_ae_ode.sh --config s001_prepare
 ```
 
-`CMAKE_PREFIX_PATH` defaults to `./libtorch` when present.
+`CMAKE_PREFIX_PATH` defaults to `./libtorch` when present. Tensor layout
+for training is `[B, T, F]` (HDF5 stores `X`, `dX` as `[F, T]`).
 
 ## Agent / contributor notes
 

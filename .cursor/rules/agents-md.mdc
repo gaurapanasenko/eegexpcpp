@@ -14,5 +14,5 @@ alwaysApply: true
   **English**.
 - Markdown and git commit messages: **72 characters** max line length
   (see `AGENTS.md` → Formatting).
-- After updating `CHANGELOG.md`, bump `version` in `pyproject.toml`
-  (see `AGENTS.md` → Versioning and changelog).
+- Changelog / version: see `AGENTS.md` → Versioning (`[draft]`, no bump
+  or commit unless the owner asks).

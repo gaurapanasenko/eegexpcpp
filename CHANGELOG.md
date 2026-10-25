@@ -5,6 +5,36 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-10-25
+
+### Changed
+
+- `LatentAeOde` built from `ModelConfig` only (`n_latent` in JSON,
+  `feature_dim` from HDF5); encoder/decoder/ODE use separate F vs L
+- `eegexpcpp_train` prints MLP stack and parameter counts before
+  the epoch loop
+
+### Added
+
+- C++ `LatentAeOde`: encoder → ODE `f(Z)` → decoder `(Z, dZ_pred)`;
+  `dZ` and `dY_pred` via forward-mode JVP (not extra MLP heads);
+  losses `J_Y`, `J_dY` on `dY_pred`, `J_dZ`, `J_z_1`, L1 on encoder/
+  decoder; AdamW training via `eegexpcpp_train` and JSON config
+  (`configs/latent_ae_ode.lorenz.json`, `latent_ae_ode.s001_prepare.json`)
+- HDF5 loader (`[F,T]` → tensor `[B,T,F]`); `nlohmann/json` via CMake
+  `FetchContent` (not in git)
+- C++ `eegexpcpp_test` (JVP, losses, HDF5, JSON); pytest
+  `tests/test_latent_ae_ode.py`
+- `scripts/train_latent_ae_ode.sh` — train launcher (`LD_LIBRARY_PATH`,
+  HDF5 check, optional `--build`)
+- Training resume: `next_epoch` from checkpoint + `epochs` per run
+- Config `data.h5_group` replaces `subject`/`band`; Lorenz HDF5 script
+  (256 Hz, ~60 s; groups `0..2` = x/y/z with `m=128`, `tau=1`)
+- `scripts/cmake_build.sh` — Ninja configure, parallel build (`nproc`)
+- Shared `libeegexpcpp_infer.so` (ctypes from Python); Streamlit admin
+  `scripts/latent_ae_ode_admin.py` — reconstruction, latent 3D, RK4
+  full/chunked per `configs/*.json`
+
 ## [0.2.0] - 2026-03-25
 
 ### Added

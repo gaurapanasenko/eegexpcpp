@@ -1,6 +1,6 @@
 [project]
 name = "eegexpcpp"
-version = "0.2.0"
+version = "0.3.0"
 description = "EEG experiments — Python tooling alongside C++/LibTorch"
 readme = "README.md"
 license = "LGPL-3.0-or-later"
@@ -14,6 +14,7 @@ dependencies = [
 
 [dependency-groups]
 dev = ["pytest"]
+admin = ["plotly>=6.0.0", "streamlit>=1.45.0"]
 
 [build-system]
 requires = ["setuptools>=61"]
