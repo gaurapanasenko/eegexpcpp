@@ -1,0 +1,18 @@
+---
+description: AGENTS.md, UA replies, EN code, 72-col markdown/commits
+alwaysApply: true
+---
+
+# AGENTS.md and language
+
+- Read `AGENTS.md` at the start of substantive work on this repo.
+- When you establish or change **project-global** facts (build, deps,
+  layout, conventions, architecture), **update `AGENTS.md`** in the same
+  change — not only in chat.
+- Follow ponytail and communication rules defined in `AGENTS.md`.
+- User-facing explanations: **Ukrainian**. Source code and comments:
+  **English**.
+- Markdown and git commit messages: **72 characters** max line length
+  (see `AGENTS.md` → Formatting).
+- After updating `CHANGELOG.md`, bump `version` in `pyproject.toml`
+  (see `AGENTS.md` → Versioning and changelog).

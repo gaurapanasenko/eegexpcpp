@@ -1,0 +1,17 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+/libtorch
+/build
+
+# Local datasets (not in git)
+/data/*.mat
+/data/*.h5
