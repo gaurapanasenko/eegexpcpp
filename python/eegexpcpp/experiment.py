@@ -22,6 +22,7 @@ class ConfigEntry:
     checkpoint_dir: Path | None
     checkpoint_path: Path | None
     checkpoint_exists: bool
+    train_device: str
 
 
 def list_config_paths(configs_dir: Path | None = None) -> list[Path]:
@@ -33,6 +34,11 @@ def list_config_paths(configs_dir: Path | None = None) -> list[Path]:
 
 def _resolve_from_root(rel: str) -> Path:
     return (ROOT / rel).resolve()
+
+
+def _train_device_from_json(train: dict) -> str:
+    raw = str(train.get("device", "cpu")).lower()
+    return "cuda" if raw == "cuda" else "cpu"
 
 
 def describe_config(path: Path) -> ConfigEntry:
@@ -51,6 +57,7 @@ def describe_config(path: Path) -> ConfigEntry:
             checkpoint_dir=None,
             checkpoint_path=None,
             checkpoint_exists=False,
+            train_device="cpu",
         )
 
     required = ("data", "model", "loss", "train")
@@ -66,6 +73,7 @@ def describe_config(path: Path) -> ConfigEntry:
             checkpoint_dir=None,
             checkpoint_path=None,
             checkpoint_exists=False,
+            train_device="cpu",
         )
 
     data = j["data"]
@@ -86,6 +94,7 @@ def describe_config(path: Path) -> ConfigEntry:
         checkpoint_dir=checkpoint_dir,
         checkpoint_path=checkpoint_path,
         checkpoint_exists=checkpoint_path.is_file(),
+        train_device=_train_device_from_json(train),
     )
 
 

@@ -1,4 +1,7 @@
+#include <atomic>
 #include <cmath>
+#include <csignal>
+#include <cstdlib>
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
@@ -15,6 +18,10 @@ namespace fs = std::filesystem;
 
 namespace {
 
+std::atomic<bool> g_train_interrupted{false};
+
+void on_train_sigint(int /*signum*/) { g_train_interrupted = true; }
+
 constexpr int kLossWidth = 12;
 constexpr int kLossPrec = 4;
 
@@ -30,6 +37,16 @@ void print_named_metric(const char* name, double value) {
   std::cout << ' ' << name << '='
             << std::right << std::fixed << std::setprecision(kLossPrec)
             << std::setfill(' ') << std::setw(kLossWidth) << value;
+}
+
+void apply_adamw_lr_weight_decay(torch::optim::AdamW& optimizer,
+                                 const eegexpcpp::TrainConfig& train) {
+  for (auto& group : optimizer.param_groups()) {
+    auto& opts =
+        static_cast<torch::optim::AdamWOptions&>(group.options());
+    opts.lr(train.lr);
+    opts.weight_decay(train.weight_decay);
+  }
 }
 
 void print_loss_row(int epoch_w,
@@ -91,6 +108,9 @@ int main(int argc, char** argv) {
       eegexpcpp::default_checkpoint_path(cfg.train.checkpoint_dir);
   const auto resume =
       eegexpcpp::try_resume_train(ckpt_path, model, optimizer);
+  if (resume.resumed && resume.optimizer_state) {
+    apply_adamw_lr_weight_decay(optimizer, cfg.train);
+  }
   const int64_t epoch_begin = resume.next_epoch;
   const int64_t epoch_end = resume.next_epoch + cfg.train.epochs;
 
@@ -105,7 +125,20 @@ int main(int argc, char** argv) {
 
   const int epoch_w = epoch_field_width(epoch_end - 1);
 
+  std::signal(SIGINT, on_train_sigint);
+
+  const auto save_checkpoint = [&](int64_t next_epoch, const char* reason) {
+    eegexpcpp::save_train_checkpoint(ckpt_path, model, optimizer, next_epoch);
+    std::cout << reason << "saved " << ckpt_path
+              << " next_epoch=" << next_epoch << '\n';
+  };
+
   for (int64_t epoch = epoch_begin; epoch < epoch_end; ++epoch) {
+    if (g_train_interrupted) {
+      save_checkpoint(epoch, "interrupt (before epoch): ");
+      return 128 + SIGINT;
+    }
+
     optimizer.zero_grad();
     auto out = model->forward(x_train, dx_train);
     auto losses = model->compute_losses(out, x_train, dx_train, cfg.loss);
@@ -132,9 +165,13 @@ int main(int argc, char** argv) {
                      losses.at("J_dZ").item<double>(),
                      losses.at("J_z_1").item<double>());
     }
+
+    if (g_train_interrupted) {
+      save_checkpoint(epoch + 1, "interrupt (after epoch): ");
+      return 128 + SIGINT;
+    }
   }
 
-  eegexpcpp::save_train_checkpoint(ckpt_path, model, optimizer, epoch_end);
-  std::cout << "saved " << ckpt_path << " next_epoch=" << epoch_end << '\n';
+  save_checkpoint(epoch_end, "");
   return 0;
 }

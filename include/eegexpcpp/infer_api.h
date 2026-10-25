@@ -53,6 +53,14 @@ int eegexpcpp_infer_ode_rhs(const EegexpcppInferHandle* handle,
                             float* dz_out,
                             int64_t f_dim);
 
+/// RK4 integrate ode(z) from z0 for n_steps with step dt.
+/// z_out row-major float32 [n_steps * n_latent]; z0 length n_latent.
+int eegexpcpp_infer_rk4_latent(const EegexpcppInferHandle* handle,
+                               int64_t n_steps,
+                               float dt,
+                               const float* z0,
+                               float* z_out);
+
 #ifdef __cplusplus
 }
 #endif

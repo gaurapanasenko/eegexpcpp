@@ -1,6 +1,6 @@
 [project]
 name = "eegexpcpp"
-version = "0.4.0"
+version = "0.5.0"
 description = "EEG experiments — Python tooling alongside C++/LibTorch"
 readme = "README.md"
 license = "LGPL-3.0-or-later"

@@ -1,20 +1,33 @@
-"""RK4 latent rollout using C++ ode_rhs and custom_rk4."""
+"""RK4 latent rollout using C++ ode_rhs / rk4_latent."""
 
 from __future__ import annotations
 
 import numpy as np
 
 from eegexpcpp.calculus import custom_rk4
-from eegexpcpp.infer_native import InferSession
 
+def _rk4_segment(
+    session: object,
+    u0: np.ndarray,
+    dt: float,
+    n: int,
+) -> np.ndarray:
+    rk4 = getattr(session, "rk4_latent", None)
+    if rk4 is not None:
+        return rk4(np.asarray(u0).reshape(-1), float(dt), int(n))
 
-def _ode_callback(du: np.ndarray, u: np.ndarray, session: InferSession, t: float) -> None:
-    du[:] = session.ode_rhs(u)
+    def f(du: np.ndarray, u: np.ndarray, p: object, t: float) -> None:
+        du[:] = session.ode_rhs(u)
+
+    u0_row = np.ascontiguousarray(u0.reshape(1, -1), dtype=np.float64)
+    return custom_rk4(f, u0_row, None, float(dt), n).astype(
+        np.float32, copy=False
+    )
 
 
 def rollout_full(
     z_true: np.ndarray,
-    session: InferSession,
+    session: object,
     dt: float,
 ) -> np.ndarray:
     """Integrate ode(z) from z_true[0] for T steps (same length as z_true).
@@ -23,17 +36,12 @@ def rollout_full(
     small ``ode_rhs`` calls).
     """
     t_len = z_true.shape[0]
-    u0 = np.ascontiguousarray(z_true[0:1], dtype=np.float32)
-
-    def f(du: np.ndarray, u: np.ndarray, p: object, t: float) -> None:
-        _ode_callback(du, u, session, t)
-
-    return custom_rk4(f, u0, None, float(dt), t_len)
+    return _rk4_segment(session, z_true[0], dt, t_len)
 
 
 def rollout_chunked(
     z_true: np.ndarray,
-    session: InferSession,
+    session: object,
     dt: float,
     chunk_samples: int,
 ) -> np.ndarray:
@@ -43,14 +51,10 @@ def rollout_chunked(
     t_len = z_true.shape[0]
     z_rk4 = np.full_like(z_true, np.nan, dtype=np.float32)
 
-    def f(du: np.ndarray, u: np.ndarray, p: object, t: float) -> None:
-        _ode_callback(du, u, session, t)
-
     for t0 in range(0, t_len, chunk_samples):
         t1 = min(t_len, t0 + chunk_samples)
         n = t1 - t0
-        u0 = np.ascontiguousarray(z_true[t0 : t0 + 1], dtype=np.float32)
-        seg = custom_rk4(f, u0, None, float(dt), n)
+        seg = _rk4_segment(session, z_true[t0], dt, n)
         z_rk4[t0:t1] = seg
     return z_rk4
 

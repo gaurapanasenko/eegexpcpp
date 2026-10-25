@@ -44,4 +44,4 @@ def test_latent_ae_ode_cpp(cpp_test_bin: Path) -> None:
     assert proc.returncode == 0, (
         f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
     )
-    assert "latent_ae_ode_test: ok" in proc.stdout
+    assert "Status: SUCCESS!" in proc.stdout

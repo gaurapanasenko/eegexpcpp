@@ -92,6 +92,14 @@ class InferSession:
             c_int64,
         ]
         lib.eegexpcpp_infer_ode_rhs.restype = c_int
+        lib.eegexpcpp_infer_rk4_latent.argtypes = [
+            c_void_p,
+            c_int64,
+            c_float,
+            POINTER(c_float),
+            POINTER(c_float),
+        ]
+        lib.eegexpcpp_infer_rk4_latent.restype = c_int
 
         cfg = str(Path(config_path).resolve())
         ckpt = (
@@ -182,6 +190,28 @@ class InferSession:
             )
         )
         return out
+
+    def rk4_latent(
+        self, z0: np.ndarray, dt: float, n_steps: int
+    ) -> np.ndarray:
+        assert self._handle is not None
+        if n_steps < 1:
+            raise ValueError("n_steps must be >= 1")
+        z0v = np.ascontiguousarray(z0, dtype=np.float32).reshape(-1)
+        l_dim = z0v.shape[0]
+        if l_dim != self.n_latent():
+            raise ValueError("z0 length must match n_latent")
+        out = np.empty(n_steps * l_dim, dtype=np.float32)
+        self._check(
+            self._lib.eegexpcpp_infer_rk4_latent(
+                self._handle,
+                c_int64(n_steps),
+                c_float(dt),
+                z0v.ctypes.data_as(POINTER(c_float)),
+                out.ctypes.data_as(POINTER(c_float)),
+            )
+        )
+        return out.reshape(n_steps, l_dim)
 
     def close(self) -> None:
         if self._handle is not None:

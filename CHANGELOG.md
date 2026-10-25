@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] - 2026-10-25
+
+### Added
+
+- C++ `rk4.hpp` (`custom_rk4_inplace`); `eegexpcpp_calculus_test` and
+  pytest `tests/test_calculus_cpp.py`
+- **doctest** (CMake `FetchContent`) for `eegexpcpp_test` and
+  `eegexpcpp_calculus_test`
+- Infer C API `eegexpcpp_infer_rk4_latent`; `InferSession.rk4_latent`;
+  latent rollout uses it when available (Python `custom_rk4` fallback)
+
+### Changed
+
+- `eegexpcpp_train`: SIGINT (Ctrl+C) saves checkpoint and `next_epoch`
+  for resume; after resume, `lr` and `weight_decay` from JSON (Adam
+  state kept)
+- Infer `ode_rhs` / RK4: reuse `[1,1,L]` work tensors; RK4 sets
+  `at::set_num_threads(1)` for the integration loop
+- Streamlit admin: default infer device from JSON `train.device`; one 3D
+  plot (encoder + full/chunk RK4) with legend on tab «Латент 3D»
+
 ## [0.4.0] - 2026-10-25
 
 ### Changed

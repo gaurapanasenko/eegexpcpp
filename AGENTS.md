@@ -76,12 +76,19 @@ CMake (`FetchContent`, v3.11.3 tarball) on configure.
   Tensors **`[B,T,F]`** (HDF5 `[F,T]` transposed on load).
 - **Train:** AdamW, all hyperparameters in JSON (`configs/`). Resume:
   train `[next_epoch, next_epoch + epochs)`; log `epoch=` is cumulative;
-  checkpoint stores `next_epoch`. Train/val: one forward per epoch on
-  full split tensors `[1, T, F]`. Infer/admin use the same layout.
+  checkpoint stores `next_epoch`. Ctrl+C saves checkpoint for resume.
+  On resume, Adam momentum from checkpoint; `lr` and `weight_decay` from
+  JSON.
+  Train/val: one forward per epoch on full split tensors `[1, T, F]`.
+  Infer/admin use the same layout.
 - Library target `eegexpcpp_model`; shared `libeegexpcpp_infer.so`
-  (C API `infer_api.h`, forward + `ode_rhs` for Python ctypes);
-  binaries `eegexpcpp` (smoke), `eegexpcpp_train`, `eegexpcpp_test`
-  (JVP/loss/HDF5; pytest wrapper).
+  (C API `infer_api.h`, forward + `ode_rhs` + `rk4_latent` for Python
+  ctypes); header `rk4.hpp` (generic RK4, no LibTorch). Binaries
+  `eegexpcpp` (smoke), `eegexpcpp_train`, `eegexpcpp_test`
+  (JVP/loss/HDF5), `eegexpcpp_calculus_test` (RK4; pytest
+  `tests/test_calculus_cpp.py`). C++ tests use **doctest** v2.4.11
+  (`FetchContent` header + `doctest.cpp` main, alias
+  `doctest::doctest_with_main`).
 
 ### Python (uv)
 

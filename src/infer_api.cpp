@@ -1,16 +1,19 @@
 #include "eegexpcpp/infer_api.h"
 
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <memory>
 #include <string>
 
+#include <ATen/Parallel.h>
 #include <torch/torch.h>
 
 #include "eegexpcpp/checkpoint.hpp"
 #include "eegexpcpp/config.hpp"
 #include "eegexpcpp/dataset_h5.hpp"
 #include "eegexpcpp/latent_ae_ode.hpp"
+#include "eegexpcpp/rk4.hpp"
 
 namespace {
 
@@ -47,7 +50,29 @@ struct InferSessionImpl {
   torch::Tensor x_all;
   torch::Tensor dx_all;
   int64_t next_epoch = -1;
+  torch::Tensor z_ode;
+  torch::Tensor dz_ode;
 };
+
+struct AtThreadSingleGuard {
+  int intra = 1;
+  AtThreadSingleGuard() {
+    intra = at::get_num_threads();
+    at::set_num_threads(1);
+  }
+  ~AtThreadSingleGuard() { at::set_num_threads(intra); }
+};
+
+void ensure_ode_work_tensors(InferSessionImpl& s) {
+  const int64_t l = s.cfg.model.n_latent;
+  if (s.z_ode.defined() && s.z_ode.size(2) == l) {
+    return;
+  }
+  const auto opts =
+      torch::TensorOptions().dtype(torch::kFloat32).device(s.device);
+  s.z_ode = torch::empty({1, 1, l}, opts);
+  s.dz_ode = torch::empty({1, 1, l}, opts);
+}
 
 std::pair<torch::Tensor, torch::Tensor> select_split(
     const InferSessionImpl& s,
@@ -62,6 +87,28 @@ std::pair<torch::Tensor, torch::Tensor> select_split(
     default:
       throw std::runtime_error("invalid split id");
   }
+}
+
+void ode_rhs_impl(InferSessionImpl& s,
+                  const float* z_in,
+                  float* dz_out) {
+  const int64_t l = s.cfg.model.n_latent;
+  ensure_ode_work_tensors(s);
+  const size_t nbytes = static_cast<size_t>(l) * sizeof(float);
+  torch::NoGradGuard no_grad;
+  if (s.device.is_cpu()) {
+    std::memcpy(s.z_ode.data_ptr<float>(), z_in, nbytes);
+    s.dz_ode.copy_(s.model->ode_forward(s.z_ode));
+    std::memcpy(dz_out, s.dz_ode.data_ptr<float>(), nbytes);
+    return;
+  }
+  auto z_cpu =
+      torch::from_blob(const_cast<float*>(z_in), {1, 1, l},
+                       torch::TensorOptions().dtype(torch::kFloat32));
+  s.z_ode.copy_(z_cpu);
+  s.dz_ode.copy_(s.model->ode_forward(s.z_ode));
+  auto dz_cpu = s.dz_ode.to(torch::kCPU, torch::kFloat32, false, true);
+  std::memcpy(dz_out, dz_cpu.data_ptr<float>(), nbytes);
 }
 
 void copy_btf_to_tf(const torch::Tensor& t,
@@ -152,6 +199,7 @@ EegexpcppInferHandle* eegexpcpp_infer_create(const char* config_json_path,
     s.next_epoch = resume.next_epoch;
     s.model->to(s.device);
     s.model->eval();
+    ensure_ode_work_tensors(s);
 
     return session.release();
   } catch (const std::exception& e) {
@@ -268,16 +316,48 @@ int eegexpcpp_infer_ode_rhs(const EegexpcppInferHandle* handle,
       set_error("f_dim mismatch (expected n_latent)");
       return -1;
     }
-    auto z =
-        torch::from_blob(const_cast<float*>(z_in), {1, 1, f_dim},
-                         torch::TensorOptions().dtype(torch::kFloat32))
-            .clone()
-            .to(s.device);
+    ode_rhs_impl(s, z_in, dz_out);
+    return 0;
+  } catch (const c10::Error& e) {
+    set_error(e.what());
+    return -1;
+  } catch (const std::exception& e) {
+    set_error(e.what());
+    return -1;
+  }
+}
+
+int eegexpcpp_infer_rk4_latent(const EegexpcppInferHandle* handle,
+                               int64_t n_steps,
+                               float dt,
+                               const float* z0,
+                               float* z_out) {
+  clear_error();
+  if (handle == nullptr || handle->impl == nullptr) {
+    set_error("null handle");
+    return -1;
+  }
+  if (z0 == nullptr || z_out == nullptr) {
+    set_error("null buffer pointer");
+    return -1;
+  }
+  if (n_steps < 1) {
+    set_error("n_steps must be >= 1");
+    return -1;
+  }
+  if (!std::isfinite(dt) || dt <= 0.f) {
+    set_error("dt must be finite and > 0");
+    return -1;
+  }
+  try {
+    auto& s = *handle->impl;
+    const int64_t ncol = s.cfg.model.n_latent;
+    AtThreadSingleGuard thread_guard;
     torch::NoGradGuard no_grad;
-    auto dz_t = s.model->ode_forward(z);
-    dz_t = dz_t.to(torch::kCPU).contiguous();
-    const float* src = dz_t.data_ptr<float>();
-    std::memcpy(dz_out, src, static_cast<size_t>(f_dim) * sizeof(float));
+    auto rhs = [&s](float* du, const float* u, double /*t*/) {
+      ode_rhs_impl(s, u, du);
+    };
+    eegexpcpp::custom_rk4_inplace(z_out, n_steps, ncol, rhs, z0, dt);
     return 0;
   } catch (const c10::Error& e) {
     set_error(e.what());

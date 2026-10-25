@@ -61,7 +61,18 @@ if entry.is_latent_ae_ode:
         st.sidebar.error("Чекпоінт відсутній")
 
 split = st.sidebar.radio("Дані", ["train", "val", "full"], index=0)
-device = st.sidebar.selectbox("Device (C++)", ["cpu", "cuda"], index=0)
+_device_opts = ("cpu", "cuda")
+_device_idx = (
+    _device_opts.index(entry.train_device)
+    if entry.train_device in _device_opts
+    else 0
+)
+device = st.sidebar.selectbox(
+    "Device (C++)",
+    _device_opts,
+    index=_device_idx,
+    key=f"infer_device_{entry.name}",
+)
 st.sidebar.caption("Forward на обраному device; RK4 ode_rhs — завжди CPU.")
 
 meta = {}
@@ -115,11 +126,11 @@ def compute_arrays(
     z_full = rollout_full(z, ode_session, dt_local)
     z_chunk = rollout_chunked(z, ode_session, dt_local, chunk_n)
     return {
-            "x": out["x"],
-            "y": out["y"],
-            "z": z,
-            "z_full": z_full,
-            "z_chunk": z_chunk,
+        "x": out["x"],
+        "y": out["y"],
+        "z": z,
+        "z_full": z_full,
+        "z_chunk": z_chunk,
         "next_epoch": session.next_epoch,
     }
 
@@ -145,6 +156,8 @@ st.caption(f"next_epoch={data['next_epoch']} | split={split} | T={data['x'].shap
 x = data["x"]
 y = data["y"]
 z = data["z"]
+z_full = data["z_full"]
+z_chunk = data["z_chunk"]
 t_axis = np.arange(x.shape[0], dtype=np.float64) / fs
 f_dim = x.shape[1]
 z_dim = z.shape[1]
@@ -158,6 +171,35 @@ t_plot = t_axis[sl]
 
 def _downsample(a: np.ndarray) -> np.ndarray:
     return a[sl]
+
+
+def _latent_3d_figure(
+    series: list[tuple[np.ndarray, str, str]],
+    title: str,
+) -> go.Figure:
+    """Each item: (z [T,L], legend name, line color)."""
+    fig = go.Figure()
+    for arr, name, color in series:
+        pts = _downsample(arr)
+        fig.add_trace(
+            go.Scatter3d(
+                x=pts[:, 0],
+                y=pts[:, 1],
+                z=pts[:, 2],
+                mode="lines",
+                name=name,
+                line=dict(width=3, color=color),
+            )
+        )
+    fig.update_layout(
+        title=title,
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        scene=dict(xaxis_title="z0", yaxis_title="z1", zaxis_title="z2"),
+        height=560,
+        margin=dict(t=80),
+    )
+    return fig
 
 
 tab_rec, tab_3d, tab_rk4, tab_chunk = st.tabs(
@@ -185,26 +227,27 @@ with tab_3d:
     if z_dim < 3:
         st.warning("Потрібно щонайменше 3 латентні виміри.")
     else:
-        fig3 = go.Figure(
-            go.Scatter3d(
-                x=z[sl, 0],
-                y=z[sl, 1],
-                z=z[sl, 2],
-                mode="lines",
-                line=dict(width=2, color=t_axis[sl], colorscale="Viridis"),
-            )
+        rmse_full_3d = float(np.sqrt(np.mean((z - z_full) ** 2)))
+        rmse_chunk_3d = float(np.sqrt(np.mean((z - z_chunk) ** 2)))
+        st.plotly_chart(
+            _latent_3d_figure(
+                [
+                    (z, "Z (encoder)", "#636efa"),
+                    (z_full, "RK4 (повний)", "#ef553b"),
+                    (z_chunk, "RK4 (шматки)", "#00cc96"),
+                ],
+                (
+                    "Латент 3D (z0–z2) — "
+                    f"RMSE full={rmse_full_3d:.6g}, "
+                    f"chunk={rmse_chunk_3d:.6g}"
+                ),
+            ),
+            width="stretch",
         )
-        fig3.update_layout(
-            title="Латент Z (перші 3 dim)",
-            scene=dict(xaxis_title="z0", yaxis_title="z1", zaxis_title="z2"),
-            height=550,
-        )
-        st.plotly_chart(fig3, width="stretch")
 
 with tab_rk4:
     dims = min(3, z_dim)
     fig_r = go.Figure()
-    z_full = data["z_full"]
     for d in range(dims):
         fig_r.add_trace(
             go.Scatter(
@@ -231,7 +274,6 @@ with tab_rk4:
     st.plotly_chart(fig_r, width="stretch")
 
 with tab_chunk:
-    z_chunk = data["z_chunk"]
     dims = min(3, z_dim)
     fig_c = go.Figure()
     for d in range(dims):

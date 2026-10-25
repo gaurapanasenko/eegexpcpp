@@ -1,12 +1,12 @@
 #include <array>
 #include <cmath>
-#include <vector>
 #include <cstdlib>
 #include <filesystem>
-#include <iostream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
+#include <doctest.h>
 #include <hdf5.h>
 #include <torch/torch.h>
 
@@ -20,25 +20,13 @@
 
 namespace {
 
-int failures = 0;
-
-void check(bool ok, const char* msg) {
-  if (!ok) {
-    std::cerr << "FAIL: " << msg << '\n';
-    ++failures;
-  }
-}
-
 void check_close(const torch::Tensor& a,
                  const torch::Tensor& b,
                  double rtol,
                  double atol,
                  const char* msg) {
-  if (!torch::allclose(a, b, rtol, atol)) {
-    const auto err = (a - b).abs().max().item<double>();
-    std::cerr << "FAIL: " << msg << " (max |diff|=" << err << ")\n";
-    ++failures;
-  }
+  MESSAGE("context: ", msg);
+  CHECK(torch::allclose(a, b, rtol, atol));
 }
 
 std::string temp_h5_path() {
@@ -84,7 +72,9 @@ void write_test_h5(const std::string& path, int f_dim, int t_dim) {
   H5Fclose(file);
 }
 
-void test_encoder_jvp() {
+}  // namespace
+
+TEST_CASE("encoder jvp") {
   torch::manual_seed(0);
   const int64_t b = 2;
   const int64_t t = 7;
@@ -95,8 +85,8 @@ void test_encoder_jvp() {
   auto x = torch::randn({b, t, f}, torch::requires_grad());
   auto dx = torch::randn({b, t, f});
   auto [z, dz] = enc->forward(x, dx);
-  check(z.sizes() == torch::IntArrayRef({b, t, l}), "encoder Z shape");
-  check(dz.sizes() == torch::IntArrayRef({b, t, l}), "encoder dZ shape");
+  CHECK(z.sizes() == torch::IntArrayRef({b, t, l}));
+  CHECK(dz.sizes() == torch::IntArrayRef({b, t, l}));
 
   auto enc_fn = [&](const at::Tensor& xin) { return enc->encode(xin); };
   auto ref = eegexpcpp::jvp(enc_fn, x, dx).second;
@@ -108,7 +98,7 @@ void test_encoder_jvp() {
   check_close(dz, numeric, 1e-2, 1e-3, "encoder dZ vs central difference");
 }
 
-void test_latent_forward_loss_grad() {
+TEST_CASE("latent forward loss grad") {
   torch::manual_seed(1);
   const int64_t b = 1;
   const int64_t t = 9;
@@ -124,14 +114,14 @@ void test_latent_forward_loss_grad() {
   auto x = torch::randn({b, t, f}, torch::requires_grad());
   auto dx = torch::randn({b, t, f});
   auto out = model->forward(x, dx);
-  check(out.y.sizes() == x.sizes(), "Y shape");
-  check(out.dy_pred.sizes() == dx.sizes(), "dY_pred shape");
-  check(out.z.sizes() == torch::IntArrayRef({b, t, l}), "Z shape");
+  CHECK(out.y.sizes() == x.sizes());
+  CHECK(out.dy_pred.sizes() == dx.sizes());
+  CHECK(out.z.sizes() == torch::IntArrayRef({b, t, l}));
 
   eegexpcpp::LossConfig lcfg;
   auto losses = model->compute_losses(out, x, dx, lcfg);
   auto total = model->total_loss(losses, lcfg);
-  check(std::isfinite(total.item<double>()), "total loss finite");
+  CHECK(std::isfinite(total.item<double>()));
   total.backward();
   bool any_grad = false;
   for (const auto& p : model->parameters()) {
@@ -140,7 +130,7 @@ void test_latent_forward_loss_grad() {
       break;
     }
   }
-  check(any_grad, "encoder/decoder/ode receive gradients");
+  CHECK(any_grad);
 
   auto z0 = out.z.select(1, 0);
   auto x0 = x.select(1, 0).narrow(-1, 0, l);
@@ -148,7 +138,7 @@ void test_latent_forward_loss_grad() {
               "J_z_1 equals mse at t=0");
 }
 
-void test_timemlp_jvp_activations() {
+TEST_CASE("timemlp jvp activations") {
   torch::manual_seed(3);
   const int64_t b = 2;
   const int64_t t = 5;
@@ -161,7 +151,7 @@ void test_timemlp_jvp_activations() {
     auto x = torch::randn({b, t, in_f});
     auto dx = torch::randn({b, t, in_f});
     auto [y, dy] = mlp->forward_jvp(x, dx);
-    check(y.sizes() == torch::IntArrayRef({b, t, out_f}), act);
+    CHECK(y.sizes() == torch::IntArrayRef({b, t, out_f}));
     check_close(y, mlp->forward(x), 1e-6, 1e-7, "TimeMlp primal");
     auto mlp_fn = [&](const at::Tensor& xin) { return mlp->forward(xin); };
     auto ref = eegexpcpp::jvp(mlp_fn, x, dx).second;
@@ -169,7 +159,7 @@ void test_timemlp_jvp_activations() {
   }
 }
 
-void test_decoder_jvp_chain() {
+TEST_CASE("decoder jvp chain") {
   torch::manual_seed(2);
   const int64_t b = 1;
   const int64_t t = 6;
@@ -180,28 +170,29 @@ void test_decoder_jvp_chain() {
   auto z = torch::randn({b, t, l}, torch::requires_grad());
   auto dz_pred = torch::randn({b, t, l});
   auto [y, dy] = dec->forward(z, dz_pred);
-  check(y.sizes() == torch::IntArrayRef({b, t, f}), "decoder Y shape");
-  check(dy.sizes() == torch::IntArrayRef({b, t, f}), "decoder dY shape");
+  CHECK(y.sizes() == torch::IntArrayRef({b, t, f}));
+  CHECK(dy.sizes() == torch::IntArrayRef({b, t, f}));
   auto dec_fn = [&](const at::Tensor& zin) { return dec->decode(zin); };
   auto ref = eegexpcpp::jvp(dec_fn, z, dz_pred).second;
   check_close(dy, ref, 1e-5, 1e-6, "decoder dY_pred matches JVP");
 }
 
-void test_h5_loader() {
+TEST_CASE("h5 loader") {
   const int f_dim = 5;
   const int t_dim = 11;
   const auto path = temp_h5_path();
   write_test_h5(path, f_dim, t_dim);
   auto [x, dx] = eegexpcpp::load_h5_pair_btf(path, "0");
-  check(x.dim() == 3 && x.size(0) == 1, "h5 batch dim");
-  check(x.size(1) == t_dim && x.size(2) == f_dim, "h5 B_T_F layout");
+  CHECK(x.dim() == 3);
+  CHECK(x.size(0) == 1);
+  CHECK(x.size(1) == t_dim);
+  CHECK(x.size(2) == f_dim);
   const float expect = 0.01f * 0 + 0.1f * 3;
-  check(std::abs(x.index({0, 3, 0}).item<float>() - expect) < 1e-5f,
-        "h5 X sample value");
+  CHECK(std::abs(x.index({0, 3, 0}).item<float>() - expect) < 1e-5f);
   std::filesystem::remove(path);
 }
 
-void test_encoder_jvp_cuda_dx_on_cpu() {
+TEST_CASE("encoder jvp cuda dx on cpu") {
   if (!torch::cuda::is_available()) {
     return;
   }
@@ -215,38 +206,15 @@ void test_encoder_jvp_cuda_dx_on_cpu() {
   auto x = torch::randn({b, t, f}, torch::TensorOptions().device(torch::kCUDA));
   auto dx = torch::randn({b, t, f});
   auto [z, dz] = enc->forward(x, dx);
-  check(z.device().is_cuda(), "encoder Z on cuda");
-  check(dz.device().is_cuda(), "encoder dZ on cuda");
+  CHECK(z.device().is_cuda());
+  CHECK(dz.device().is_cuda());
 }
 
-void test_config_json() {
+TEST_CASE("config json") {
   const auto path = std::filesystem::path(__FILE__).parent_path().parent_path() /
                     "configs" / "latent_ae_ode.lorenz.json";
   const auto cfg = eegexpcpp::load_config(path.string());
-  check(cfg.train.lr > 0.0, "config lr");
-  check(!cfg.data.h5_path.empty(), "config h5_path");
-  check(cfg.model.n_latent == 3, "config lorenz n_latent");
-}
-
-}  // namespace
-
-int main() {
-  try {
-    test_encoder_jvp();
-    test_timemlp_jvp_activations();
-    test_encoder_jvp_cuda_dx_on_cpu();
-    test_decoder_jvp_chain();
-    test_latent_forward_loss_grad();
-    test_h5_loader();
-    test_config_json();
-  } catch (const std::exception& ex) {
-    std::cerr << "FAIL: exception: " << ex.what() << '\n';
-    return 1;
-  }
-  if (failures > 0) {
-    std::cerr << failures << " test(s) failed\n";
-    return 1;
-  }
-  std::cout << "latent_ae_ode_test: ok\n";
-  return 0;
+  CHECK(cfg.train.lr > 0.0);
+  CHECK(!cfg.data.h5_path.empty());
+  CHECK(cfg.model.n_latent == 3);
 }
