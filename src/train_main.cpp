@@ -7,6 +7,8 @@
 #include <iostream>
 #include <string>
 
+#include <torch/data/dataloader.h>
+#include <torch/data/transforms/stack.h>
 #include <torch/torch.h>
 
 #include "eegexpcpp/checkpoint.hpp"
@@ -85,13 +87,20 @@ int main(int argc, char** argv) {
       cfg.data.h5_path, cfg.data.h5_group);
   auto [train_pair, val_pair] =
       eegexpcpp::split_train_val(x_all, dx_all, cfg.data.train_fraction);
-  auto x_train = train_pair.first.to(device);
-  auto dx_train = train_pair.second.to(device);
+  auto x_train = train_pair.first.squeeze(0).to(device);
+  auto dx_train = train_pair.second.squeeze(0).to(device);
   auto x_val = val_pair.first.to(device);
   auto dx_val = val_pair.second.to(device);
 
+  eegexpcpp::TimePairDataset dataset(x_train, dx_train);
+  auto train_loader =
+      torch::data::make_data_loader<torch::data::samplers::RandomSampler>(
+          dataset.map(torch::data::transforms::Stack<>()),
+          torch::data::DataLoaderOptions().batch_size(
+              static_cast<size_t>(cfg.train.batch_size)));
+
   eegexpcpp::ModelConfig model_cfg = cfg.model;
-  model_cfg.feature_dim = x_train.size(2);
+  model_cfg.feature_dim = x_train.size(-1);
   eegexpcpp::LatentAeOde model(model_cfg);
   model->to(device);
   model->train();
@@ -139,18 +148,46 @@ int main(int argc, char** argv) {
       return 128 + SIGINT;
     }
 
-    optimizer.zero_grad();
-    auto out = model->forward(x_train, dx_train);
-    auto losses = model->compute_losses(out, x_train, dx_train, cfg.loss);
-    auto loss = model->total_loss(losses, cfg.loss);
-    loss.backward();
-    if (cfg.train.grad_clip_norm > 0.0) {
-      torch::nn::utils::clip_grad_norm_(model->parameters(),
-                                        cfg.train.grad_clip_norm);
-    }
-    optimizer.step();
+    const bool log_epoch =
+        epoch % cfg.train.log_every == 0 || epoch == epoch_end - 1;
+    double sum_train = 0;
+    double sum_y = 0;
+    double sum_dy = 0;
+    double sum_dz = 0;
+    double sum_z1 = 0;
+    int64_t seen = 0;
 
-    if (epoch % cfg.train.log_every == 0 || epoch == epoch_end - 1) {
+    for (auto& batch : *train_loader) {
+      if (g_train_interrupted) {
+        save_checkpoint(epoch, "interrupt (during epoch): ");
+        return 128 + SIGINT;
+      }
+
+      auto x = batch.data.unsqueeze(1);
+      auto dx = batch.target.unsqueeze(1);
+      optimizer.zero_grad();
+      auto out = model->forward(x, dx);
+      auto losses = model->compute_losses(out, x, dx, cfg.loss);
+      auto loss = model->total_loss(losses, cfg.loss);
+      loss.backward();
+      if (cfg.train.grad_clip_norm > 0.0) {
+        torch::nn::utils::clip_grad_norm_(model->parameters(),
+                                          cfg.train.grad_clip_norm);
+      }
+      optimizer.step();
+
+      if (log_epoch) {
+        const auto n = static_cast<double>(x.size(0));
+        sum_train += loss.item<double>() * n;
+        sum_y += losses.at("J_Y").item<double>() * n;
+        sum_dy += losses.at("J_dY").item<double>() * n;
+        sum_dz += losses.at("J_dZ").item<double>() * n;
+        sum_z1 += losses.at("J_z_1").item<double>() * n;
+        seen += x.size(0);
+      }
+    }
+
+    if (log_epoch) {
       model->eval();
       torch::NoGradGuard no_grad;
       auto vout = model->forward(x_val, dx_val);
@@ -159,11 +196,9 @@ int main(int argc, char** argv) {
       auto vtotal = model->total_loss(vlosses, cfg.loss);
       model->train();
 
-      print_loss_row(epoch_w, epoch, loss.item<double>(),
-                     vtotal.item<double>(), losses.at("J_Y").item<double>(),
-                     losses.at("J_dY").item<double>(),
-                     losses.at("J_dZ").item<double>(),
-                     losses.at("J_z_1").item<double>());
+      const double inv = 1.0 / static_cast<double>(seen);
+      print_loss_row(epoch_w, epoch, sum_train * inv, vtotal.item<double>(),
+                     sum_y * inv, sum_dy * inv, sum_dz * inv, sum_z1 * inv);
     }
 
     if (g_train_interrupted) {

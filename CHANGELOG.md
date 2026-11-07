@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [draft]
+
+### Changed
+
+- `eegexpcpp_train` minibatches time steps with LibTorch
+  `RandomSampler`. JSON `train.batch_size` is required.
+  Train `J_z_1` applies to each sampled step (`T = 1`), not
+  only the trajectory start. Val is still one forward on the
+  full validation split.
+
 ## [0.6.0] - 2026-10-25
 
 ### Added

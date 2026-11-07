@@ -83,8 +83,16 @@ CMake (`FetchContent`, v3.11.3 tarball) on configure.
   checkpoint stores `next_epoch`. Ctrl+C saves checkpoint for resume.
   On resume, Adam momentum from checkpoint; `lr` and `weight_decay` from
   JSON.
-  Train/val: one forward per epoch on full split tensors `[1, T, F]`.
-  Infer/admin use the same layout.
+  Train: RandomSampler minibatches of time rows. HDF5 stays
+  `[1, T, F]`; the train split is squeezed to `[T, F]`.
+  `get(i)` returns that row `[F]` and the paired `dX` row.
+  The loader stacks to `[batch_size, F]`; train unsqueezes to
+  `[B, 1, F]` before the existing forward. `train.batch_size`
+  is required. One optimizer step per batch. Logged train
+  metrics are the epoch mean, weighted by batch size. With
+  `T = 1`, `J_z_1` applies to every sampled step. Val stays
+  one forward on `[1, T_val, F]`. Infer/admin still use the
+  full `[1, T, F]` layout.
 - Library target `eegexpcpp_model`; shared `libeegexpcpp_infer.so`
   (C API `infer_api.h`, forward + `ode_rhs` + `rk4_latent` for Python
   ctypes); header `rk4.hpp` (generic RK4, no LibTorch). Binaries

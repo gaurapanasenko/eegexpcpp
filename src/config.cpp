@@ -97,6 +97,10 @@ ExperimentConfig load_config(const std::string& path) {
 
   const auto& jt = j.at("train");
   cfg.train.epochs = jt.value("epochs", cfg.train.epochs);
+  cfg.train.batch_size = jt.at("batch_size").get<int64_t>();
+  if (cfg.train.batch_size <= 0) {
+    throw std::runtime_error("train.batch_size must be positive");
+  }
   cfg.train.lr = jt.value("lr", cfg.train.lr);
   cfg.train.weight_decay = jt.value("weight_decay", cfg.train.weight_decay);
   if (jt.contains("adamw_betas")) {

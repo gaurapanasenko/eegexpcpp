@@ -68,6 +68,7 @@ struct LossConfig {
 
 struct TrainConfig {
   int64_t epochs = 100;
+  int64_t batch_size = 0;
   double lr = 1e-3;
   double weight_decay = 1e-2;
   double adamw_beta1 = 0.9;

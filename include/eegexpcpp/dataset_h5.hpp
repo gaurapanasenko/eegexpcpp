@@ -1,8 +1,10 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <utility>
 
+#include <torch/data/datasets/base.h>
 #include <torch/torch.h>
 
 namespace eegexpcpp {
@@ -18,5 +20,19 @@ std::pair<std::pair<torch::Tensor, torch::Tensor>,
 split_train_val(torch::Tensor x,
                 torch::Tensor dx,
                 double train_fraction);
+
+/// In-memory time rows. `x` and `dx` are `[T, F]`. `get(i)` is that row.
+class TimePairDataset
+    : public torch::data::datasets::Dataset<TimePairDataset> {
+ public:
+  TimePairDataset(torch::Tensor x, torch::Tensor dx);
+
+  torch::data::Example<> get(size_t index) override;
+  std::optional<size_t> size() const override;
+
+ private:
+  torch::Tensor x_;
+  torch::Tensor dx_;
+};
 
 }  // namespace eegexpcpp

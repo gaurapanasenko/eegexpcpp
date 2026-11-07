@@ -111,4 +111,22 @@ split_train_val(torch::Tensor x,
   return {{x_tr, dx_tr}, {x_va, dx_va}};
 }
 
+TimePairDataset::TimePairDataset(torch::Tensor x, torch::Tensor dx)
+    : x_(std::move(x)), dx_(std::move(dx)) {
+  if (x_.dim() != 2 || dx_.dim() != 2 || !x_.sizes().equals(dx_.sizes()) ||
+      x_.size(0) < 1) {
+    throw std::runtime_error(
+        "TimePairDataset expects matching non-empty [T, F] tensors");
+  }
+}
+
+torch::data::Example<> TimePairDataset::get(size_t index) {
+  const auto i = static_cast<int64_t>(index);
+  return {x_[i], dx_[i]};
+}
+
+std::optional<size_t> TimePairDataset::size() const {
+  return static_cast<size_t>(x_.size(0));
+}
+
 }  // namespace eegexpcpp

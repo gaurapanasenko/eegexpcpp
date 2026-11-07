@@ -8,6 +8,8 @@
 
 #include <doctest.h>
 #include <hdf5.h>
+#include <torch/data/dataloader.h>
+#include <torch/data/transforms/stack.h>
 #include <torch/torch.h>
 
 #include "eegexpcpp/config.hpp"
@@ -317,6 +319,43 @@ TEST_CASE("config json") {
                     "configs" / "latent_ae_ode.lorenz.json";
   const auto cfg = eegexpcpp::load_config(path.string());
   CHECK(cfg.train.lr > 0.0);
+  CHECK(cfg.train.batch_size == 256);
   CHECK(!cfg.data.h5_path.empty());
   CHECK(cfg.model.n_latent == 3);
+}
+
+TEST_CASE("time pair dataset loader") {
+  const int64_t t = 10;
+  const int64_t f = 3;
+  const size_t batch = 4;
+  auto x = torch::arange(t * f).reshape({t, f}).to(torch::kFloat32);
+  auto dx = x + 1;
+  eegexpcpp::TimePairDataset dataset(x, dx);
+  auto row = dataset.get(3);
+  CHECK(row.data.sizes().equals(torch::IntArrayRef({f})));
+  CHECK(torch::allclose(row.data, x[3]));
+  CHECK(torch::allclose(row.target, dx[3]));
+  CHECK(dataset.size().value() == static_cast<size_t>(t));
+
+  auto loader =
+      torch::data::make_data_loader<torch::data::samplers::RandomSampler>(
+          dataset.map(torch::data::transforms::Stack<>()),
+          torch::data::DataLoaderOptions().batch_size(batch));
+  int64_t seen = 0;
+  auto seen_mask = torch::zeros({t}, torch::kBool);
+  for (auto& b : *loader) {
+    CHECK(b.data.size(0) > 0);
+    CHECK(static_cast<size_t>(b.data.size(0)) <= batch);
+    CHECK(b.data.size(1) == f);
+    CHECK(b.target.sizes().equals(b.data.sizes()));
+    seen += b.data.size(0);
+    for (int64_t i = 0; i < b.data.size(0); ++i) {
+      auto eq = torch::all(x == b.data[i], -1);
+      CHECK(eq.sum().item<int64_t>() == 1);
+      const auto idx = torch::argmax(eq.to(torch::kFloat32)).item<int64_t>();
+      seen_mask[idx] = true;
+    }
+  }
+  CHECK(seen == t);
+  CHECK(seen_mask.all().item<bool>());
 }
