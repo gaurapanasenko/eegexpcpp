@@ -207,6 +207,9 @@ EegexpcppInferHandle* eegexpcpp_infer_create(const char* config_json_path,
       set_error("checkpoint not found or unloadable: " + ckpt);
       return nullptr;
     }
+    const auto [z_mean, z_std] = eegexpcpp::load_h5_z_affine(
+        s.cfg.data.h5_path, s.cfg.data.h5_group);
+    s.model->set_latent_z_affine(z_mean, z_std);
     s.next_epoch = resume.next_epoch;
     s.model->to(s.device);
     s.model->eval();

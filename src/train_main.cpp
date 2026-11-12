@@ -95,6 +95,8 @@ int main(int argc, char** argv) {
 
   eegexpcpp::ModelConfig model_cfg = cfg.model;
   model_cfg.feature_dim = x_train.size(2);
+  const auto [z_mean, z_std] = eegexpcpp::load_h5_z_affine(
+      cfg.data.h5_path, cfg.data.h5_group);
   eegexpcpp::LatentAeOde model(model_cfg);
   model->to(device);
   model->train();
@@ -111,6 +113,7 @@ int main(int argc, char** argv) {
       eegexpcpp::default_checkpoint_path(cfg.train.checkpoint_dir);
   const auto resume =
       eegexpcpp::try_resume_train(ckpt_path, model, optimizer);
+  model->set_latent_z_affine(z_mean, z_std);
   if (resume.resumed && resume.optimizer_state) {
     apply_adamw_lr_weight_decay(optimizer, cfg.train);
   }
@@ -161,10 +164,12 @@ int main(int argc, char** argv) {
         model->eval();
         auto fit_out = model->forward(x_train, dx_train);
         const auto& sindy = model->ode_module()->sindy();
-        auto theta = sindy->library().build_theta(fit_out.z);
+        auto theta = sindy->library().build_theta(
+            model->latent_z_physical(fit_out.z));
         const auto theta_nt =
             theta.reshape({-1, theta.size(-1)});
-        const auto dz_nt = fit_out.dz.reshape({-1, fit_out.dz.size(-1)});
+        const auto dz_nt = model->latent_dz_physical(fit_out.dz)
+                               .reshape({-1, fit_out.dz.size(-1)});
         const auto fit = eegexpcpp::sindy_stlsq_fit(
             theta_nt, dz_nt, stlsq_cfg.threshold, stlsq_cfg.max_iter,
             stlsq_cfg.ridge);

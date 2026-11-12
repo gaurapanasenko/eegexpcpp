@@ -56,6 +56,29 @@ torch::Tensor h5_dataset_to_btf(const std::string& h5_path,
   return t;
 }
 
+float h5_read_scalar_f32(const std::string& h5_path,
+                         const std::string& dset_path) {
+  hid_t file = H5Fopen(h5_path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+  if (file < 0) {
+    throw std::runtime_error("H5Fopen failed: " + h5_path);
+  }
+  hid_t dset = H5Dopen2(file, dset_path.c_str(), H5P_DEFAULT);
+  if (dset < 0) {
+    H5Fclose(file);
+    throw std::runtime_error("H5Dopen failed: " + dset_path);
+  }
+  float value = 0.f;
+  if (H5Dread(dset, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+              &value) < 0) {
+    H5Dclose(dset);
+    H5Fclose(file);
+    throw std::runtime_error("H5Dread failed: " + dset_path);
+  }
+  H5Dclose(dset);
+  H5Fclose(file);
+  return value;
+}
+
 std::string normalize_h5_group(const std::string& group) {
   std::string g = group;
   while (!g.empty() && g.front() == '/') {
@@ -82,6 +105,14 @@ std::pair<torch::Tensor, torch::Tensor> load_h5_pair_btf(
     throw std::runtime_error("X and dX shape mismatch in " + prefix);
   }
   return {x, dx};
+}
+
+std::pair<float, float> load_h5_z_affine(const std::string& h5_path,
+                                         const std::string& h5_group) {
+  const std::string prefix = normalize_h5_group(h5_group);
+  const float mean = h5_read_scalar_f32(h5_path, prefix + "/X_mean");
+  const float std = h5_read_scalar_f32(h5_path, prefix + "/X_std");
+  return {mean, std};
 }
 
 std::pair<std::pair<torch::Tensor, torch::Tensor>,

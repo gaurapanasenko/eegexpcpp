@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [draft]
 
+- `docs/latent_ae_ode_math.md`: formulas for Latent AE+ODE C++ path
+  (data layout, JVP, ODE/SINDy, loss, STLSQ, RK4).
+
 ### Added
 
 - SINDy STLSQ projection during train when `model.ode.stlsq_every` > 0;
@@ -19,6 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Loss JSON: `lambda_l1` split into `lambda_l1_ae` and `lambda_l1_ode`;
+  legacy `lambda_l1` still loads when the new keys are absent.
+- ODE input: denormalize latent with HDF5 `X_mean` / `X_std` (+ `1e-8`);
+  `dZ_pred` to decoder divided by the same scale; STLSQ uses physical
+  `Z` / `dZ`. Affine from JSON `data.h5_*`, not checkpoint.
 - `J_z_1`: MSE of `z[..., 0]` vs `x[..., 0]` over all time (was `t=0` only
   and first `n_latent` channels).
 

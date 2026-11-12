@@ -72,7 +72,8 @@ struct LossConfig {
   double lambda_dY = 0.01;
   double lambda_dZ = 0.1;
   double lambda_z1 = 1.0;
-  double lambda_l1 = 1e-5;
+  double lambda_l1_ae = 1e-5;
+  double lambda_l1_ode = 1e-5;
 };
 
 struct TrainConfig {

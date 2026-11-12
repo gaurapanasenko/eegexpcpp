@@ -12,6 +12,10 @@ std::pair<torch::Tensor, torch::Tensor> load_h5_pair_btf(
     const std::string& h5_path,
     const std::string& h5_group);
 
+/// Scalar `X_mean`, `X_std` from the same group (prep z-score before embed).
+std::pair<float, float> load_h5_z_affine(const std::string& h5_path,
+                                         const std::string& h5_group);
+
 /// Split along time (dim=1) into train and val tensors.
 std::pair<std::pair<torch::Tensor, torch::Tensor>,
           std::pair<torch::Tensor, torch::Tensor>>

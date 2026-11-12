@@ -84,6 +84,9 @@ int main(int argc, char** argv) {
       std::cerr << "cannot load checkpoint: " << checkpoint_path << '\n';
       return 1;
     }
+    const auto [z_mean, z_std] = eegexpcpp::load_h5_z_affine(
+        cfg.data.h5_path, cfg.data.h5_group);
+    model->set_latent_z_affine(z_mean, z_std);
 
     const auto table =
         eegexpcpp::build_sindy_coefficients_table(model, cfg.model);

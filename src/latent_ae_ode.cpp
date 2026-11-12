@@ -10,6 +10,8 @@ namespace eegexpcpp {
 
 namespace {
 
+constexpr float kZscoreEps = 1e-8f;
+
 torch::Tensor mse_mean(torch::Tensor a, torch::Tensor b) {
   return torch::mse_loss(a, b, torch::Reduction::Mean);
 }
@@ -32,12 +34,27 @@ LatentAeOdeImpl::LatentAeOdeImpl(const ModelConfig& model_cfg)
   register_module("encoder", encoder_);
   register_module("ode", ode_);
   register_module("decoder", decoder_);
+  register_buffer("latent_mean", latent_mean_);
+  register_buffer("latent_scale", latent_scale_);
+}
+
+void LatentAeOdeImpl::set_latent_z_affine(float mean, float std) {
+  latent_mean_.fill_(mean);
+  latent_scale_.fill_(std + kZscoreEps);
+}
+
+torch::Tensor LatentAeOdeImpl::latent_z_physical(torch::Tensor z) const {
+  return z * latent_scale_ + latent_mean_;
+}
+
+torch::Tensor LatentAeOdeImpl::latent_dz_physical(torch::Tensor dz) const {
+  return dz * latent_scale_;
 }
 
 ForwardOutput LatentAeOdeImpl::forward(torch::Tensor x, torch::Tensor dx) {
   ForwardOutput out;
   std::tie(out.z, out.dz) = encoder_->forward(x, dx);
-  out.dz_pred = ode_->forward(out.z);
+  out.dz_pred = ode_forward(out.z);
   std::tie(out.y, out.dy_pred) = decoder_->forward(out.z, out.dz_pred);
   return out;
 }
@@ -53,12 +70,14 @@ std::map<std::string, torch::Tensor> LatentAeOdeImpl::compute_losses(
   losses["J_dZ"] = mse_mean(out.dz_pred, out.dz);
   losses["J_z_1"] = mse_mean(out.z.select(2, 0), x.select(2, 0));
   losses["J_reg_ae_l1"] =
-      l1_mean_abs(*encoder_) + l1_mean_abs(*decoder_) + l1_mean_abs(*ode_);
+      l1_mean_abs(*encoder_) + l1_mean_abs(*decoder_);
+  losses["J_reg_ode_l1"] = l1_mean_abs(*ode_);
   return losses;
 }
 
 torch::Tensor LatentAeOdeImpl::ode_forward(torch::Tensor z) {
-  return ode_->forward(std::move(z));
+  const auto z_phys = latent_z_physical(z);
+  return ode_->forward(z_phys) / latent_scale_;
 }
 
 torch::Tensor LatentAeOdeImpl::total_loss(
@@ -68,7 +87,8 @@ torch::Tensor LatentAeOdeImpl::total_loss(
          losses.at("J_dY") * loss_cfg.lambda_dY +
          losses.at("J_dZ") * loss_cfg.lambda_dZ +
          losses.at("J_z_1") * loss_cfg.lambda_z1 +
-         losses.at("J_reg_ae_l1") * loss_cfg.lambda_l1;
+         losses.at("J_reg_ae_l1") * loss_cfg.lambda_l1_ae +
+         losses.at("J_reg_ode_l1") * loss_cfg.lambda_l1_ode;
 }
 
 torch::Tensor l1_mean_abs(const torch::nn::Module& module) {

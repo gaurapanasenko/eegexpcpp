@@ -56,6 +56,15 @@ void write_ft_dataset(hid_t loc,
   H5Sclose(space);
 }
 
+void write_scalar_dataset(hid_t loc, const char* name, float value) {
+  hid_t space = H5Screate(H5S_SCALAR);
+  hid_t dset = H5Dcreate2(loc, name, H5T_IEEE_F32LE, space, H5P_DEFAULT,
+                          H5P_DEFAULT, H5P_DEFAULT);
+  H5Dwrite(dset, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &value);
+  H5Dclose(dset);
+  H5Sclose(space);
+}
+
 void write_test_h5(const std::string& path, int f_dim, int t_dim) {
   std::vector<float> x(static_cast<size_t>(f_dim * t_dim));
   std::vector<float> dx(static_cast<size_t>(f_dim * t_dim));
@@ -73,6 +82,8 @@ void write_test_h5(const std::string& path, int f_dim, int t_dim) {
   hid_t g0 = H5Gcreate2(file, "0", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
   write_ft_dataset(g0, "X", x, f_dim, t_dim);
   write_ft_dataset(g0, "dX", dx, f_dim, t_dim);
+  write_scalar_dataset(g0, "X_mean", 1.5f);
+  write_scalar_dataset(g0, "X_std", 2.0f);
   H5Gclose(g0);
   H5Fclose(file);
 }
@@ -194,7 +205,26 @@ TEST_CASE("h5 loader") {
   CHECK(x.size(2) == f_dim);
   const float expect = 0.01f * 0 + 0.1f * 3;
   CHECK(std::abs(x.index({0, 3, 0}).item<float>() - expect) < 1e-5f);
+  const auto [mean, std] = eegexpcpp::load_h5_z_affine(path, "0");
+  CHECK(mean == doctest::Approx(1.5f));
+  CHECK(std == doctest::Approx(2.0f));
   std::filesystem::remove(path);
+}
+
+TEST_CASE("latent z affine broadcast") {
+  eegexpcpp::ModelConfig mcfg;
+  mcfg.n_latent = 3;
+  mcfg.feature_dim = 5;
+  eegexpcpp::LatentAeOde model(mcfg);
+  model->set_latent_z_affine(1.0f, 2.0f);
+  const float scale = 2.0f + 1e-8f;
+  auto z = torch::full({1, 4, 3}, 0.5f);
+  check_close(model->latent_z_physical(z),
+              torch::full_like(z, 0.5f * scale + 1.0f), 1e-6, 1e-7,
+              "z_phys = z*scale+mean");
+  auto dz = torch::ones_like(z);
+  check_close(model->latent_dz_physical(dz), torch::full_like(z, scale), 1e-6,
+              1e-7, "dz_phys = dz*scale");
 }
 
 TEST_CASE("encoder jvp cuda dx on cpu") {

@@ -21,7 +21,8 @@
     "lambda_dY": 0.01,
     "lambda_dZ": 0.1,
     "lambda_z1": 1.0,
-    "lambda_l1": 1.0e-5
+    "lambda_l1_ae": 1.0e-5,
+    "lambda_l1_ode": 1.0e-5
   },
   "train": {
     "epochs": 10000,

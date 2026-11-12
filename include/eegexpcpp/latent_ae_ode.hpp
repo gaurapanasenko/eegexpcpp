@@ -37,6 +37,12 @@ class LatentAeOdeImpl : public torch::nn::Module {
 
   torch::Tensor ode_forward(torch::Tensor z);
 
+  /// Match `eegexpcpp.prep.zscore` affine on latent dim (broadcast).
+  void set_latent_z_affine(float mean, float std);
+
+  torch::Tensor latent_z_physical(torch::Tensor z) const;
+  torch::Tensor latent_dz_physical(torch::Tensor dz) const;
+
   const Ode& ode_module() const { return ode_; }
 
  private:
@@ -44,6 +50,8 @@ class LatentAeOdeImpl : public torch::nn::Module {
   Encoder encoder_{nullptr};
   Ode ode_{nullptr};
   Decoder decoder_{nullptr};
+  torch::Tensor latent_mean_{torch::zeros({1, 1, 1})};
+  torch::Tensor latent_scale_{torch::ones({1, 1, 1})};
 };
 
 TORCH_MODULE(LatentAeOde);

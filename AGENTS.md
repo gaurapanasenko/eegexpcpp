@@ -68,13 +68,17 @@ CMake (`FetchContent`, v3.11.3 tarball) on configure.
 
 ### C++ model (`include/eegexpcpp/`)
 
+- Math (notation, JVP, ODE/SINDy, loss, RK4):
+  `docs/latent_ae_ode_math.md`.
 - **LatentAeOde:** JSON `model.n_latent`; `feature_dim` from HDF5 at
   build time (`ModelConfig` only to construct). `Z = enc(X)` with
   `Z.shape[-1]=n_latent`; `dZ` / `dY_pred` via `TimeMlp::forward_jvp`
-  (Linear + gelu/relu/tanh); `dZ_pred = ode(Z)`;
-  `Y,dY_pred = decoder(Z,dZ_pred)` like `enc(X,dX)`. JSON **`model.ode`**:
+  (Linear + gelu/relu/tanh); ODE sees physical `Z*X_std+eps+X_mean`
+  from HDF5 group scalars (`load_h5_z_affine`); `dZ_pred` back in norm
+  space is `ode(Z_phys)/(X_std+eps)` for decoder JVP. JSON **`model.ode`**:
   **`type`** `nn` (`hidden`, `activation`) or **`sindy`** (`libraries[]`
-  with `poly` / `fourier` terms; `dZ = Theta(Z) @ Xi`, AdamW + `lambda_l1`.
+  with `poly` / `fourier` terms; `dZ = Theta(Z) @ Xi`. Loss L1:
+  `loss.lambda_l1_ae`, `loss.lambda_l1_ode` (legacy `lambda_l1` → both).
   Optional STLSQ on train latent targets: `stlsq_every` (0=off),
   `stlsq_threshold`, `stlsq_max_iter`, `stlsq_ridge` under `model.ode`.
   SINDy export: `eegexpcpp_sindy_csv`, infer

@@ -107,7 +107,19 @@ ExperimentConfig load_config(const std::string& path) {
   cfg.loss.lambda_dY = jl.value("lambda_dY", cfg.loss.lambda_dY);
   cfg.loss.lambda_dZ = jl.value("lambda_dZ", cfg.loss.lambda_dZ);
   cfg.loss.lambda_z1 = jl.value("lambda_z1", cfg.loss.lambda_z1);
-  cfg.loss.lambda_l1 = jl.value("lambda_l1", cfg.loss.lambda_l1);
+  cfg.loss.lambda_l1_ae =
+      jl.value("lambda_l1_ae", cfg.loss.lambda_l1_ae);
+  cfg.loss.lambda_l1_ode =
+      jl.value("lambda_l1_ode", cfg.loss.lambda_l1_ode);
+  if (jl.contains("lambda_l1")) {
+    const double legacy = jl.at("lambda_l1").get<double>();
+    if (!jl.contains("lambda_l1_ae")) {
+      cfg.loss.lambda_l1_ae = legacy;
+    }
+    if (!jl.contains("lambda_l1_ode")) {
+      cfg.loss.lambda_l1_ode = legacy;
+    }
+  }
 
   const auto& jt = j.at("train");
   cfg.train.epochs = jt.value("epochs", cfg.train.epochs);
