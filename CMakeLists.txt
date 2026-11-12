@@ -3,6 +3,7 @@ project(eegexpcpp CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(NOT DEFINED CMAKE_PREFIX_PATH AND EXISTS "${CMAKE_SOURCE_DIR}/libtorch")
   list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/libtorch")
@@ -54,6 +55,7 @@ add_library(
   src/ode_sindy.cpp
   src/sindy_library.cpp
   src/sindy_table.cpp
+  src/sindy_stlsq.cpp
   src/decoder.cpp
   src/latent_ae_ode.cpp
   src/checkpoint.cpp

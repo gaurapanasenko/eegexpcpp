@@ -18,7 +18,11 @@
           "interaction_only": false,
           "include_bias": true
         }
-      ]
+      ],
+      "stlsq_every": 0,
+      "stlsq_threshold": 0.05,
+      "stlsq_max_iter": 25,
+      "stlsq_ridge": 1.0e-8
     },
     "decoder_hidden": [32, 64],
     "decoder_activation": "gelu"
@@ -27,8 +31,8 @@
     "lambda_Y": 1.0,
     "lambda_dY": 0.01,
     "lambda_dZ": 0.1,
-    "lambda_z1": 1.0,
-    "lambda_l1": 1.0e-5
+    "lambda_z1": 10.0,
+    "lambda_l1": 1.0e-1
   },
   "train": {
     "epochs": 10000,

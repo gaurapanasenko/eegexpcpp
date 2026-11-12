@@ -22,4 +22,12 @@ torch::Tensor OdeSindyImpl::forward(torch::Tensor z) {
 
 torch::Tensor OdeSindyImpl::xi_matrix() const { return xi_; }
 
+void OdeSindyImpl::set_xi_matrix(torch::Tensor xi) {
+  if (!xi_.sizes().equals(xi.sizes())) {
+    throw std::runtime_error("set_xi_matrix shape mismatch");
+  }
+  torch::NoGradGuard no_grad;
+  xi_.copy_(xi.detach());
+}
+
 }  // namespace eegexpcpp

@@ -5,6 +5,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [draft]
+
+### Added
+
+- SINDy STLSQ projection during train when `model.ode.stlsq_every` > 0;
+  JSON keys `stlsq_threshold`, `stlsq_max_iter`, `stlsq_ridge`.
+
+### Fixed
+
+- STLSQ lstsq kept a single latent target per column; `matrix_nnz` flattened
+  `[F,L]` Xi (crash at `.item()` on row length `L` when `n_latent=3`).
+
+### Changed
+
+- `J_z_1`: MSE of `z[..., 0]` vs `x[..., 0]` over all time (was `t=0` only
+  and first `n_latent` channels).
+
 ## [0.6.0] - 2026-10-25
 
 ### Added

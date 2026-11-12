@@ -20,6 +20,7 @@
 #include "eegexpcpp/ode.hpp"
 #include "eegexpcpp/ode_sindy.hpp"
 #include "eegexpcpp/sindy_library.hpp"
+#include "eegexpcpp/sindy_stlsq.hpp"
 #include "eegexpcpp/sindy_table.hpp"
 
 namespace {
@@ -136,10 +137,10 @@ TEST_CASE("latent forward loss grad") {
   }
   CHECK(any_grad);
 
-  auto z0 = out.z.select(1, 0);
-  auto x0 = x.select(1, 0).narrow(-1, 0, l);
-  check_close(losses.at("J_z_1"), torch::mse_loss(z0, x0), 1e-6, 1e-7,
-              "J_z_1 equals mse at t=0");
+  check_close(
+      losses.at("J_z_1"),
+      torch::mse_loss(out.z.select(2, 0), x.select(2, 0)),
+      1e-6, 1e-7, "J_z_1 equals mse(z[:,:,0], x[:,:,0])");
 }
 
 TEST_CASE("timemlp jvp activations") {
@@ -290,6 +291,77 @@ TEST_CASE("sindy xi starts at zero") {
   ocfg.libraries.push_back(poly);
   eegexpcpp::OdeSindy sindy(2, ocfg.libraries);
   CHECK(torch::allclose(sindy->xi_matrix(), torch::zeros({3, 2})));
+}
+
+TEST_CASE("sindy stlsq nnz on xi matrix") {
+  torch::manual_seed(22);
+  const int64_t n = 128;
+  const int64_t f = 10;
+  const int64_t l = 3;
+  auto theta = torch::randn({n, f});
+  auto xi_true = torch::zeros({f, l});
+  xi_true[2][0] = 1.2;
+  xi_true[5][1] = -0.8;
+  xi_true[1][2] = 0.5;
+  auto dz = theta.mm(xi_true);
+  const auto fit =
+      eegexpcpp::sindy_stlsq_fit(theta, dz, 0.05, 25, 1e-8);
+  CHECK(fit.xi.size(0) == f);
+  CHECK(fit.xi.size(1) == l);
+  CHECK(fit.nnz >= 1);
+  CHECK(fit.nnz <= f * l);
+}
+
+TEST_CASE("sindy stlsq cuda train layout") {
+  if (!torch::cuda::is_available()) {
+    MESSAGE("cuda unavailable, skip");
+    return;
+  }
+  torch::manual_seed(33);
+  const int64_t n = 256;
+  const int64_t f = 10;
+  const int64_t l = 3;
+  const auto device = torch::Device(torch::kCUDA);
+  auto theta = torch::randn({n, f}, device);
+  auto xi_true = torch::zeros({f, l});
+  xi_true[3][1] = -1.0;
+  auto dz = theta.mm(xi_true.to(device));
+  const auto fit = eegexpcpp::sindy_stlsq_fit(theta, dz, 0.05, 25, 1e-8);
+  CHECK(fit.xi.device().is_cuda());
+  CHECK(fit.xi.size(0) == f);
+  CHECK(fit.xi.size(1) == l);
+  CHECK(fit.nnz >= 0);
+}
+
+TEST_CASE("sindy stlsq sparse column") {
+  torch::manual_seed(11);
+  const int64_t n = 200;
+  const int64_t f = 6;
+  auto theta = torch::randn({n, f});
+  auto xi_true = torch::zeros({f, 1});
+  xi_true[1] = 2.0;
+  xi_true[4] = -1.5;
+  auto dz = theta.mm(xi_true);
+  const auto fit =
+      eegexpcpp::sindy_stlsq_fit(theta, dz, 0.05, 25, 1e-8);
+  CHECK(fit.xi.size(0) == f);
+  CHECK(fit.xi.size(1) == 1);
+  CHECK(fit.nnz == 2);
+  CHECK(std::abs(fit.xi[1].item<double>() - 2.0) < 0.15);
+  CHECK(std::abs(fit.xi[4].item<double>() + 1.5) < 0.15);
+}
+
+TEST_CASE("sindy set xi matrix") {
+  eegexpcpp::OdeConfig ocfg;
+  ocfg.type = eegexpcpp::OdeType::Sindy;
+  eegexpcpp::SindyLibraryConfig poly;
+  poly.kind = eegexpcpp::SindyLibraryConfig::Kind::Poly;
+  poly.poly.degree = 1;
+  ocfg.libraries.push_back(poly);
+  eegexpcpp::OdeSindy sindy(2, ocfg.libraries);
+  auto xi = torch::ones({3, 2}) * 0.25;
+  sindy->set_xi_matrix(xi);
+  CHECK(torch::allclose(sindy->xi_matrix(), xi));
 }
 
 TEST_CASE("sindy coefficients table") {

@@ -51,10 +51,7 @@ std::map<std::string, torch::Tensor> LatentAeOdeImpl::compute_losses(
   losses["J_Y"] = mse_mean(out.y, x);
   losses["J_dY"] = mse_mean(out.dy_pred, dx);
   losses["J_dZ"] = mse_mean(out.dz_pred, out.dz);
-  const auto x0 = x.select(1, 0);
-  const auto z0 = out.z.select(1, 0);
-  const int64_t n = std::min(n_latent_, x0.size(-1));
-  losses["J_z_1"] = mse_mean(z0, x0.narrow(-1, 0, n));
+  losses["J_z_1"] = mse_mean(out.z.select(2, 0), x.select(2, 0));
   losses["J_reg_ae_l1"] =
       l1_mean_abs(*encoder_) + l1_mean_abs(*decoder_) + l1_mean_abs(*ode_);
   return losses;

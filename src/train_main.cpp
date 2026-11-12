@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 
 #include <torch/torch.h>
@@ -13,6 +14,8 @@
 #include "eegexpcpp/config.hpp"
 #include "eegexpcpp/dataset_h5.hpp"
 #include "eegexpcpp/latent_ae_ode.hpp"
+#include "eegexpcpp/sindy_stlsq.hpp"
+#include "eegexpcpp/sindy_table.hpp"
 
 namespace fs = std::filesystem;
 
@@ -149,6 +152,38 @@ int main(int argc, char** argv) {
                                         cfg.train.grad_clip_norm);
     }
     optimizer.step();
+
+    const auto& stlsq_cfg = cfg.model.ode.stlsq;
+    if (eegexpcpp::model_ode_is_sindy(cfg.model) && stlsq_cfg.every > 0) {
+      const int64_t since_begin = epoch - epoch_begin + 1;
+      if (since_begin > 0 && since_begin % stlsq_cfg.every == 0) {
+        torch::NoGradGuard no_grad;
+        model->eval();
+        auto fit_out = model->forward(x_train, dx_train);
+        const auto& sindy = model->ode_module()->sindy();
+        auto theta = sindy->library().build_theta(fit_out.z);
+        const auto theta_nt =
+            theta.reshape({-1, theta.size(-1)});
+        const auto dz_nt = fit_out.dz.reshape({-1, fit_out.dz.size(-1)});
+        const auto fit = eegexpcpp::sindy_stlsq_fit(
+            theta_nt, dz_nt, stlsq_cfg.threshold, stlsq_cfg.max_iter,
+            stlsq_cfg.ridge);
+        bool xi_updated = false;
+        for (const auto& pair : model->named_parameters()) {
+          if (pair.key() == "ode.sindy.xi") {
+            pair.value().copy_(fit.xi.to(device));
+            eegexpcpp::reset_adamw_momentum(optimizer, pair.value());
+            xi_updated = true;
+            break;
+          }
+        }
+        if (!xi_updated) {
+          throw std::runtime_error("ode.sindy.xi parameter not found");
+        }
+        model->train();
+        std::cout << "stlsq epoch=" << epoch << " nnz=" << fit.nnz << '\n';
+      }
+    }
 
     if (epoch % cfg.train.log_every == 0 || epoch == epoch_end - 1) {
       model->eval();

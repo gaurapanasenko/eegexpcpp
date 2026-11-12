@@ -2,6 +2,7 @@
 
 #include <filesystem>
 
+#include <torch/optim/adamw.h>
 #include <torch/serialize.h>
 
 namespace fs = std::filesystem;
@@ -56,6 +57,21 @@ void save_train_checkpoint(const std::string& path,
   archive << optimizer;
   archive.write("next_epoch", c10::IValue(next_epoch));
   archive.save_to(path);
+}
+
+void reset_adamw_momentum(torch::optim::AdamW& optimizer,
+                          const torch::Tensor& param) {
+  auto it = optimizer.state().find(param.unsafeGetTensorImpl());
+  if (it == optimizer.state().end()) {
+    return;
+  }
+  auto& state = static_cast<torch::optim::AdamWParamState&>(*it->second);
+  state.exp_avg().zero_();
+  state.exp_avg_sq().zero_();
+  if (state.max_exp_avg_sq().defined()) {
+    state.max_exp_avg_sq().zero_();
+  }
+  state.step(0);
 }
 
 }  // namespace eegexpcpp

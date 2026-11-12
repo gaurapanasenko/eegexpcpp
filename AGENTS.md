@@ -74,8 +74,10 @@ CMake (`FetchContent`, v3.11.3 tarball) on configure.
   (Linear + gelu/relu/tanh); `dZ_pred = ode(Z)`;
   `Y,dY_pred = decoder(Z,dZ_pred)` like `enc(X,dX)`. JSON **`model.ode`**:
   **`type`** `nn` (`hidden`, `activation`) or **`sindy`** (`libraries[]`
-  with `poly` / `fourier` terms; `dZ = Theta(Z) @ Xi`, AdamW + `lambda_l1`,
-  no STLSQ yet). SINDy export: `eegexpcpp_sindy_csv`, infer
+  with `poly` / `fourier` terms; `dZ = Theta(Z) @ Xi`, AdamW + `lambda_l1`.
+  Optional STLSQ on train latent targets: `stlsq_every` (0=off),
+  `stlsq_threshold`, `stlsq_max_iter`, `stlsq_ridge` under `model.ode`.
+  SINDy export: `eegexpcpp_sindy_csv`, infer
   infer `sindy_csv` → Python `csv` parse; admin tab «SINDy Xi».
   Tensors **`[B,T,F]`** (HDF5 `[F,T]` transposed on load).
 - **Train:** AdamW, all hyperparameters in JSON (`configs/`). Resume:

@@ -231,6 +231,28 @@ with tab_rec:
     )
     st.plotly_chart(fig, width="stretch")
 
+    if f_dim >= 1 and z_dim >= 1:
+        err0 = (x[:, 0] - z[:, 0]) ** 2
+        jz1_mse = float(np.mean(err0))
+        fig_z0 = go.Figure()
+        fig_z0.add_trace(
+            go.Scatter(x=t_plot, y=_downsample(x[:, 0]), name="X₀ (оригінал)")
+        )
+        fig_z0.add_trace(
+            go.Scatter(x=t_plot, y=_downsample(z[:, 0]), name="Z₀ (encoder)")
+        )
+        fig_z0.update_layout(
+            title=f"Z₀ vs X₀ — J_z_1 (MSE по часу) = {jz1_mse:.6g}",
+            xaxis_title="час (с)",
+            yaxis_title="амплітуда",
+            height=450,
+        )
+        st.plotly_chart(fig_z0, width="stretch")
+        st.caption(
+            "J_z_1 у train: MSE між Z[:,0] і X[:,0] на всіх t. "
+            f"Лог — train split; тут split={split!r}."
+        )
+
 with tab_3d:
     if z_dim < 3:
         st.warning("Потрібно щонайменше 3 латентні виміри.")

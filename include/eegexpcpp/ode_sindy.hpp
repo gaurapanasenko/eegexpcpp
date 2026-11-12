@@ -24,6 +24,8 @@ class OdeSindyImpl : public torch::nn::Module {
 
   torch::Tensor xi_matrix() const;
 
+  void set_xi_matrix(torch::Tensor xi);
+
  private:
   int64_t latent_dim_{0};
   SindyFeatureLibrary library_;
