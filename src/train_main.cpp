@@ -14,8 +14,7 @@
 #include "eegexpcpp/config.hpp"
 #include "eegexpcpp/dataset_h5.hpp"
 #include "eegexpcpp/latent_ae_ode.hpp"
-#include "eegexpcpp/sindy_stlsq.hpp"
-#include "eegexpcpp/sindy_table.hpp"
+#include "eegexpcpp/sindy_xi.hpp"
 
 namespace fs = std::filesystem;
 
@@ -131,9 +130,16 @@ int main(int argc, char** argv) {
 
   const int epoch_w = epoch_field_width(epoch_end - 1);
 
+  const auto& xi_cfg = cfg.model.ode.xi_prune;
+  const bool xi_prune_train = cfg.model.ode.type == eegexpcpp::OdeType::Sindy &&
+                              xi_cfg.prune_every > 0;
+
   std::signal(SIGINT, on_train_sigint);
 
   const auto save_checkpoint = [&](int64_t next_epoch, const char* reason) {
+    if (xi_prune_train) {
+      model->ode_module()->sindy()->enforce_trainable_mask();
+    }
     eegexpcpp::save_train_checkpoint(ckpt_path, model, optimizer, next_epoch);
     std::cout << reason << "saved " << ckpt_path
               << " next_epoch=" << next_epoch << '\n';
@@ -154,39 +160,18 @@ int main(int argc, char** argv) {
       torch::nn::utils::clip_grad_norm_(model->parameters(),
                                         cfg.train.grad_clip_norm);
     }
+    if (xi_prune_train) {
+      model->ode_module()->sindy()->mask_xi_gradient();
+    }
     optimizer.step();
-
-    const auto& stlsq_cfg = cfg.model.ode.stlsq;
-    if (eegexpcpp::model_ode_is_sindy(cfg.model) && stlsq_cfg.every > 0) {
-      const int64_t since_begin = epoch - epoch_begin + 1;
-      if (since_begin > 0 && since_begin % stlsq_cfg.every == 0) {
+    if (xi_prune_train) {
+      auto& sindy = model->ode_module()->sindy();
+      sindy->enforce_trainable_mask();
+      if (eegexpcpp::xi_prune_due_epoch(epoch, xi_cfg.prune_every)) {
         torch::NoGradGuard no_grad;
-        model->eval();
-        auto fit_out = model->forward(x_train, dx_train);
-        const auto& sindy = model->ode_module()->sindy();
-        auto theta = sindy->library().build_theta(
-            model->latent_z_physical(fit_out.z));
-        const auto theta_nt =
-            theta.reshape({-1, theta.size(-1)});
-        const auto dz_nt = model->latent_dz_physical(fit_out.dz)
-                               .reshape({-1, fit_out.dz.size(-1)});
-        const auto fit = eegexpcpp::sindy_stlsq_fit(
-            theta_nt, dz_nt, stlsq_cfg.threshold, stlsq_cfg.max_iter,
-            stlsq_cfg.ridge);
-        bool xi_updated = false;
-        for (const auto& pair : model->named_parameters()) {
-          if (pair.key() == "ode.sindy.xi") {
-            pair.value().copy_(fit.xi.to(device));
-            eegexpcpp::reset_adamw_momentum(optimizer, pair.value());
-            xi_updated = true;
-            break;
-          }
-        }
-        if (!xi_updated) {
-          throw std::runtime_error("ode.sindy.xi parameter not found");
-        }
-        model->train();
-        std::cout << "stlsq epoch=" << epoch << " nnz=" << fit.nnz << '\n';
+        sindy->prune_xi(xi_cfg.threshold);
+        std::cout << "xi_prune epoch=" << epoch
+                  << " nnz=" << sindy->xi_nnz(xi_cfg.threshold) << '\n';
       }
     }
 

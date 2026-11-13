@@ -34,4 +34,11 @@ const OdeSindy& OdeImpl::sindy() const {
   return sindy_;
 }
 
+OdeSindy& OdeImpl::sindy() {
+  if (kind_ != OdeType::Sindy) {
+    throw std::runtime_error("ode is not sindy");
+  }
+  return sindy_;
+}
+
 }  // namespace eegexpcpp

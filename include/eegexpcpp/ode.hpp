@@ -19,6 +19,8 @@ class OdeImpl : public torch::nn::Module {
 
   const OdeSindy& sindy() const;
 
+  OdeSindy& sindy();
+
  private:
   OdeType kind_{OdeType::Nn};
   TimeMlp net_{nullptr};

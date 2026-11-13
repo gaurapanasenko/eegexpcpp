@@ -79,19 +79,14 @@ ExperimentConfig load_config(const std::string& path) {
     if (cfg.model.ode.libraries.empty()) {
       throw std::runtime_error("sindy ode requires non-empty libraries");
     }
-    auto& st = cfg.model.ode.stlsq;
-    st.every = jo.value("stlsq_every", st.every);
-    st.threshold = jo.value("stlsq_threshold", st.threshold);
-    st.max_iter = jo.value("stlsq_max_iter", st.max_iter);
-    st.ridge = jo.value("stlsq_ridge", st.ridge);
-    if (st.max_iter <= 0) {
-      throw std::runtime_error("stlsq_max_iter must be positive");
+    auto& xp = cfg.model.ode.xi_prune;
+    xp.prune_every = jo.value("xi_prune_every", xp.prune_every);
+    xp.threshold = jo.value("xi_threshold", xp.threshold);
+    if (xp.prune_every < 0) {
+      throw std::runtime_error("xi_prune_every must be non-negative");
     }
-    if (st.threshold < 0.0) {
-      throw std::runtime_error("stlsq_threshold must be non-negative");
-    }
-    if (st.ridge < 0.0) {
-      throw std::runtime_error("stlsq_ridge must be non-negative");
+    if (xp.threshold < 0.0) {
+      throw std::runtime_error("xi_threshold must be non-negative");
     }
   } else {
     throw std::runtime_error("unknown ode type: " + ode_type);

@@ -23,6 +23,9 @@ class ConfigEntry:
     checkpoint_path: Path | None
     checkpoint_exists: bool
     train_device: str
+    ode_type: str = "nn"
+    xi_prune_every: int = 0
+    xi_threshold: float = 0.0
 
 
 def list_config_paths(configs_dir: Path | None = None) -> list[Path]:
@@ -78,6 +81,11 @@ def describe_config(path: Path) -> ConfigEntry:
 
     data = j["data"]
     train = j["train"]
+    model = j.get("model", {})
+    ode = model.get("ode", {})
+    ode_type = str(ode.get("type", "nn"))
+    xi_prune_every = int(ode.get("xi_prune_every", 0) or 0)
+    xi_threshold = float(ode.get("xi_threshold", 0.0) or 0.0)
     h5_rel = data.get("h5_path")
     h5_group = data.get("h5_group", "0")
     ck_dir_rel = train.get("checkpoint_dir", "checkpoints")
@@ -95,6 +103,9 @@ def describe_config(path: Path) -> ConfigEntry:
         checkpoint_path=checkpoint_path,
         checkpoint_exists=checkpoint_path.is_file(),
         train_device=_train_device_from_json(train),
+        ode_type=ode_type,
+        xi_prune_every=xi_prune_every,
+        xi_threshold=xi_threshold,
     )
 
 

@@ -79,8 +79,9 @@ CMake (`FetchContent`, v3.11.3 tarball) on configure.
   **`type`** `nn` (`hidden`, `activation`) or **`sindy`** (`libraries[]`
   with `poly` / `fourier` terms; `dZ = Theta(Z) @ Xi`. Loss L1:
   `loss.lambda_l1_ae`, `loss.lambda_l1_ode` (legacy `lambda_l1` → both).
-  Optional STLSQ on train latent targets: `stlsq_every` (0=off),
-  `stlsq_threshold`, `stlsq_max_iter`, `stlsq_ridge` under `model.ode`.
+  Optional `xi_prune_every` / `xi_threshold`: `OdeSindy` buffer
+  `xi_trainable` masks Xi in forward (`prune_xi` shrinks mask); train
+  masks grads and zeros frozen storage each step (before save too).
   SINDy export: `eegexpcpp_sindy_csv`, infer
   infer `sindy_csv` → Python `csv` parse; admin tab «SINDy Xi».
   Tensors **`[B,T,F]`** (HDF5 `[F,T]` transposed on load).
@@ -98,7 +99,8 @@ CMake (`FetchContent`, v3.11.3 tarball) on configure.
   (JVP/loss/HDF5), `eegexpcpp_calculus_test` (RK4; pytest
   `tests/test_calculus_cpp.py`). C++ tests use **doctest** v2.4.11
   (`FetchContent` header + `doctest.cpp` main, alias
-  `doctest::doctest_with_main`).
+  `doctest::doctest_with_main`). `eegexpcpp_test`: `DOCTEST_*` macros
+  after `torch` (not short `CHECK`).
 
 ### Python (uv)
 

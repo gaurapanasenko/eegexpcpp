@@ -8,25 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [draft]
 
 - `docs/latent_ae_ode_math.md`: formulas for Latent AE+ODE C++ path
-  (data layout, JVP, ODE/SINDy, loss, STLSQ, RK4).
+  (data layout, JVP, ODE/SINDy, loss, RK4).
 
 ### Added
 
-- SINDy STLSQ projection during train when `model.ode.stlsq_every` > 0;
-  JSON keys `stlsq_threshold`, `stlsq_max_iter`, `stlsq_ridge`.
-
-### Fixed
-
-- STLSQ lstsq kept a single latent target per column; `matrix_nnz` flattened
-  `[F,L]` Xi (crash at `.item()` on row length `L` when `n_latent=3`).
+- `xi_prune_every` / `xi_threshold`: freeze small `ode.sindy.xi` entries
+  during train (`xi_trainable` buffer in checkpoint).
 
 ### Changed
 
+- Removed in-train SINDy STLSQ and AdamW state resets from `eegexpcpp_train`.
+- `OdeSindy`: `xi_trainable` buffer applied in forward; train calls `prune_xi`
+  on schedule; grad clamp + storage zero on frozen entries each step (and
+  before checkpoint save). Admin Xi CSV: effective `xi_matrix`.
+- Streamlit admin: cache key includes checkpoint mtime; SINDy prune caption
+  from `describe_config`.
+- `xi_prune_due_epoch`: prune on global epoch index (resume-safe).
+- `eegexpcpp_test`: `DOCTEST_CONFIG_NO_SHORT_MACRO_NAMES` (LibTorch `CHECK`).
+- Admin «Латент 3D»: RK4 (шматки) draws separate segments (no jump
+  lines across chunk boundaries).
 - Loss JSON: `lambda_l1` split into `lambda_l1_ae` and `lambda_l1_ode`;
   legacy `lambda_l1` still loads when the new keys are absent.
 - ODE input: denormalize latent with HDF5 `X_mean` / `X_std` (+ `1e-8`);
-  `dZ_pred` to decoder divided by the same scale; STLSQ uses physical
-  `Z` / `dZ`. Affine from JSON `data.h5_*`, not checkpoint.
+  `dZ_pred` to decoder divided by the same scale. Affine from JSON
+  `data.h5_*`, not checkpoint.
 - `J_z_1`: MSE of `z[..., 0]` vs `x[..., 0]` over all time (was `t=0` only
   and first `n_latent` channels).
 

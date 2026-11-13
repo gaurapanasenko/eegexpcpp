@@ -5,6 +5,15 @@
 `eegexpcpp_infer`). Підготовку HDF5 робить Python; формули нижче
 фіксують те, що потрапляє в тензори `X`, `dX` і в навчання.
 
+## Джерела
+
+Ідея latent autoencoder + SINDy для рівнянь у латентному просторі —
+Champion et al., PNAS (2019):
+
+- [Стаття](https://www.pnas.org/doi/full/10.1073/pnas.1906995116)
+- [Відео](https://www.youtube.com/watch?v=WHhDgxkiR9c)
+- [Код (оригінал)](https://github.com/kpchamp/SindyAutoencoders)
+
 ## Позначення
 
 | Символ        | Значення                                                |
@@ -140,7 +149,7 @@ $$
 $$
 
 Так RHS узгоджена з тим, що енкодер і втрати працюють у z-score
-просторі латенту; SINDy/STLSQ на трені використовують фізичні
+просторі латенту; SINDy на трені використовує фізичні
 $\mathbf{Z}_{\mathrm{phys}}$, $\mathbf{dZ}_{\mathrm{phys}}$ з
 прямого проходу.
 
@@ -170,35 +179,14 @@ $$
 \mathbf{dZ}_{\mathrm{phys}} = \Theta(\mathbf{Z}_{\mathrm{phys}})\,\Xi.
 $$
 
-На початку навчання $\Xi = 0$; оптимізатор і STLSQ оновлюють
-$\Xi$.
+На початку навчання $\Xi = 0$; оптимізатор оновлює $\Xi$.
 
-### STLSQ (опційно під час train)
+### Xi prune (опційно під час train)
 
-Кожні `stlsq_every` епох після `optimizer.step`, на **train** тензорах
-без градієнта:
-
-1. Зібрати $\Theta \in \mathbb{R}^{N \times K}$,
-   $N = B \cdot T$, та цільові стовпчики
-   $\mathbf{dZ}_{\mathrm{phys}}$.
-2. Для кожної координати латенту $j = 1\ldots L$ — послідовний
-   thresholding + ridge least squares.
-
-Повна підмножина ознак $\mathcal{S}$, ridge $\lambda \ge 0$:
-
-$$
-\min_{\boldsymbol{\xi}_{\mathcal{S}}}
-\left\|
-\Theta_{:, \mathcal{S}} \boldsymbol{\xi}_{\mathcal{S}} - \mathbf{y}
-\right\|_2^2
-+ \lambda \left\|\boldsymbol{\xi}_{\mathcal{S}}\right\|_2^2
-$$
-
-(нормальні рівняння з $\Theta^\top\Theta + \lambda I$).
-
-Поріг $\tau$: коефіцієнти з $|\xi_k| < \tau$ обнуляються;
-ітерації до збігу підтримки або `stlsq_max_iter`. Результат записується
-в $\Xi$; момент AdamW для `ode.sindy.xi` скидається.
+Кожні `xi_prune_every` **глобальних** епох (0-based; після епохи
+$k$ коли $(k+1) \bmod N = 0$): `prune_xi` — hard-threshold $\Xi$,
+стиск `xi_trainable`, обнулення зрізаних комірок у параметрі; у forward
+$\Xi \odot m$.
 
 ## Функція втрат
 
@@ -308,6 +296,6 @@ flowchart LR
 | JVP MLP | `src/mlp.cpp` |
 | ODE nn / SINDy | `src/ode.cpp`, `src/ode_sindy.cpp` |
 | Бібліотека $\Theta$ | `src/sindy_library.cpp` |
-| STLSQ | `src/sindy_stlsq.cpp`, `src/train_main.cpp` |
+| Xi prune | `src/sindy_xi.cpp`, `src/train_main.cpp` |
 | RK4 | `include/eegexpcpp/rk4.hpp`, `src/infer_api.cpp` |
 | HDF5 | `src/dataset_h5.cpp` |

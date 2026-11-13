@@ -57,6 +57,13 @@ export LD_LIBRARY_PATH=./libtorch/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 `CMAKE_PREFIX_PATH` defaults to `./libtorch` when present. Tensor layout
 for training is `[B, T, F]` (HDF5 stores `X`, `dX` as `[F, T]`).
 
+Math: [docs/latent_ae_ode_math.md](docs/latent_ae_ode_math.md). Latent
+AE + SINDy background (Champion et al., PNAS 2019):
+
+- [Article](https://www.pnas.org/doi/full/10.1073/pnas.1906995116)
+- [Talk (YouTube)](https://www.youtube.com/watch?v=WHhDgxkiR9c)
+- [Reference code](https://github.com/kpchamp/SindyAutoencoders)
+
 ## Agent / contributor notes
 
 See [AGENTS.md](AGENTS.md) for project conventions (ponytail, formatting).

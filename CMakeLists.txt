@@ -55,7 +55,7 @@ add_library(
   src/ode_sindy.cpp
   src/sindy_library.cpp
   src/sindy_table.cpp
-  src/sindy_stlsq.cpp
+  src/sindy_xi.cpp
   src/decoder.cpp
   src/latent_ae_ode.cpp
   src/checkpoint.cpp
@@ -94,6 +94,10 @@ target_link_libraries(
   PRIVATE eegexpcpp_model doctest::doctest_with_main
 )
 target_compile_options(eegexpcpp_test PRIVATE ${TORCH_CXX_FLAGS})
+target_compile_definitions(
+  eegexpcpp_test
+  PRIVATE DOCTEST_CONFIG_NO_SHORT_MACRO_NAMES
+)
 
 add_executable(eegexpcpp_calculus_test src/calculus_rk4_test.cpp)
 target_include_directories(

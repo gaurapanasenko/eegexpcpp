@@ -26,10 +26,24 @@ class OdeSindyImpl : public torch::nn::Module {
 
   void set_xi_matrix(torch::Tensor xi);
 
+  /// Hard-threshold xi_, freeze mask, zero pruned storage.
+  void prune_xi(double threshold);
+
+  int64_t xi_nnz(double threshold) const;
+
+  /// Zero gradients on frozen xi entries (after backward).
+  void mask_xi_gradient();
+
+  /// Zero xi_ storage on frozen entries (after optimizer step).
+  void enforce_trainable_mask();
+
  private:
+  torch::Tensor xi_effective() const;
+
   int64_t latent_dim_{0};
   SindyFeatureLibrary library_;
   torch::Tensor xi_;
+  torch::Tensor xi_trainable_;
 };
 
 TORCH_MODULE(OdeSindy);

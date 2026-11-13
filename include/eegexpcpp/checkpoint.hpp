@@ -26,8 +26,4 @@ void save_train_checkpoint(const std::string& path,
                            const torch::optim::AdamW& optimizer,
                            int64_t next_epoch);
 
-/// Zero AdamW momentum for one parameter (e.g. after hard Xi projection).
-void reset_adamw_momentum(torch::optim::AdamW& optimizer,
-                          const torch::Tensor& param);
-
 }  // namespace eegexpcpp

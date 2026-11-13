@@ -45,6 +45,8 @@ class LatentAeOdeImpl : public torch::nn::Module {
 
   const Ode& ode_module() const { return ode_; }
 
+  Ode& ode_module() { return ode_; }
+
  private:
   int64_t n_latent_{0};
   Encoder encoder_{nullptr};

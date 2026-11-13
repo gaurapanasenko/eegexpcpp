@@ -7,37 +7,35 @@
   "model": {
     "n_latent": 3,
     "encoder_hidden": [64, 32],
-    "encoder_activation": "gelu",
+    "encoder_activation": "tanh",
     "ode": {
       "type": "sindy",
       "libraries": [
         {
           "type": "poly",
-          "degree": 2,
+          "degree": 3,
           "include_interaction": true,
           "interaction_only": false,
           "include_bias": true
         }
       ],
-      "stlsq_every": 1000,
-      "stlsq_threshold": 0.5,
-      "stlsq_max_iter": 25,
-      "stlsq_ridge": 1.0e-8
+      "xi_prune_every": 3000,
+      "xi_threshold": 0.05
     },
     "decoder_hidden": [32, 64],
-    "decoder_activation": "gelu"
+    "decoder_activation": "tanh"
   },
   "loss": {
-    "lambda_Y": 0.1,
-    "lambda_dY": 0.01,
-    "lambda_dZ": 100.0,
-    "lambda_z1": 1.0,
+    "lambda_Y": 1.0,
+    "lambda_dY": 0,
+    "lambda_dZ": 1.0e-1,
+    "lambda_z1": 0,
     "lambda_l1_ae": 0,
-    "lambda_l1_ode": 1.0e+2
+    "lambda_l1_ode": 1.0e-3
   },
   "train": {
     "epochs": 10000,
-    "lr": 0.001,
+    "lr": 1.0e-3,
     "weight_decay": 0.01,
     "adamw_betas": [0.9, 0.999],
     "adamw_eps": 1.0e-8,

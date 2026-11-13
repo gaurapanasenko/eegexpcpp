@@ -19,8 +19,9 @@
 #include "eegexpcpp/mlp.hpp"
 #include "eegexpcpp/ode.hpp"
 #include "eegexpcpp/ode_sindy.hpp"
+#include "eegexpcpp/rk4.hpp"
 #include "eegexpcpp/sindy_library.hpp"
-#include "eegexpcpp/sindy_stlsq.hpp"
+#include "eegexpcpp/sindy_xi.hpp"
 #include "eegexpcpp/sindy_table.hpp"
 
 namespace {
@@ -30,8 +31,8 @@ void check_close(const torch::Tensor& a,
                  double rtol,
                  double atol,
                  const char* msg) {
-  MESSAGE("context: ", msg);
-  CHECK(torch::allclose(a, b, rtol, atol));
+  DOCTEST_MESSAGE("context: ", msg);
+  DOCTEST_CHECK(torch::allclose(a, b, rtol, atol));
 }
 
 std::string temp_h5_path() {
@@ -90,7 +91,7 @@ void write_test_h5(const std::string& path, int f_dim, int t_dim) {
 
 }  // namespace
 
-TEST_CASE("encoder jvp") {
+DOCTEST_TEST_CASE("encoder jvp") {
   torch::manual_seed(0);
   const int64_t b = 2;
   const int64_t t = 7;
@@ -101,8 +102,8 @@ TEST_CASE("encoder jvp") {
   auto x = torch::randn({b, t, f}, torch::requires_grad());
   auto dx = torch::randn({b, t, f});
   auto [z, dz] = enc->forward(x, dx);
-  CHECK(z.sizes() == torch::IntArrayRef({b, t, l}));
-  CHECK(dz.sizes() == torch::IntArrayRef({b, t, l}));
+  DOCTEST_CHECK(z.sizes() == torch::IntArrayRef({b, t, l}));
+  DOCTEST_CHECK(dz.sizes() == torch::IntArrayRef({b, t, l}));
 
   auto enc_fn = [&](const at::Tensor& xin) { return enc->encode(xin); };
   auto ref = eegexpcpp::jvp(enc_fn, x, dx).second;
@@ -114,7 +115,7 @@ TEST_CASE("encoder jvp") {
   check_close(dz, numeric, 1e-2, 1e-3, "encoder dZ vs central difference");
 }
 
-TEST_CASE("latent forward loss grad") {
+DOCTEST_TEST_CASE("latent forward loss grad") {
   torch::manual_seed(1);
   const int64_t b = 1;
   const int64_t t = 9;
@@ -130,14 +131,14 @@ TEST_CASE("latent forward loss grad") {
   auto x = torch::randn({b, t, f}, torch::requires_grad());
   auto dx = torch::randn({b, t, f});
   auto out = model->forward(x, dx);
-  CHECK(out.y.sizes() == x.sizes());
-  CHECK(out.dy_pred.sizes() == dx.sizes());
-  CHECK(out.z.sizes() == torch::IntArrayRef({b, t, l}));
+  DOCTEST_CHECK(out.y.sizes() == x.sizes());
+  DOCTEST_CHECK(out.dy_pred.sizes() == dx.sizes());
+  DOCTEST_CHECK(out.z.sizes() == torch::IntArrayRef({b, t, l}));
 
   eegexpcpp::LossConfig lcfg;
   auto losses = model->compute_losses(out, x, dx, lcfg);
   auto total = model->total_loss(losses, lcfg);
-  CHECK(std::isfinite(total.item<double>()));
+  DOCTEST_CHECK(std::isfinite(total.item<double>()));
   total.backward();
   bool any_grad = false;
   for (const auto& p : model->parameters()) {
@@ -146,7 +147,7 @@ TEST_CASE("latent forward loss grad") {
       break;
     }
   }
-  CHECK(any_grad);
+  DOCTEST_CHECK(any_grad);
 
   check_close(
       losses.at("J_z_1"),
@@ -154,7 +155,7 @@ TEST_CASE("latent forward loss grad") {
       1e-6, 1e-7, "J_z_1 equals mse(z[:,:,0], x[:,:,0])");
 }
 
-TEST_CASE("timemlp jvp activations") {
+DOCTEST_TEST_CASE("timemlp jvp activations") {
   torch::manual_seed(3);
   const int64_t b = 2;
   const int64_t t = 5;
@@ -167,7 +168,7 @@ TEST_CASE("timemlp jvp activations") {
     auto x = torch::randn({b, t, in_f});
     auto dx = torch::randn({b, t, in_f});
     auto [y, dy] = mlp->forward_jvp(x, dx);
-    CHECK(y.sizes() == torch::IntArrayRef({b, t, out_f}));
+    DOCTEST_CHECK(y.sizes() == torch::IntArrayRef({b, t, out_f}));
     check_close(y, mlp->forward(x), 1e-6, 1e-7, "TimeMlp primal");
     auto mlp_fn = [&](const at::Tensor& xin) { return mlp->forward(xin); };
     auto ref = eegexpcpp::jvp(mlp_fn, x, dx).second;
@@ -175,7 +176,7 @@ TEST_CASE("timemlp jvp activations") {
   }
 }
 
-TEST_CASE("decoder jvp chain") {
+DOCTEST_TEST_CASE("decoder jvp chain") {
   torch::manual_seed(2);
   const int64_t b = 1;
   const int64_t t = 6;
@@ -186,32 +187,32 @@ TEST_CASE("decoder jvp chain") {
   auto z = torch::randn({b, t, l}, torch::requires_grad());
   auto dz_pred = torch::randn({b, t, l});
   auto [y, dy] = dec->forward(z, dz_pred);
-  CHECK(y.sizes() == torch::IntArrayRef({b, t, f}));
-  CHECK(dy.sizes() == torch::IntArrayRef({b, t, f}));
+  DOCTEST_CHECK(y.sizes() == torch::IntArrayRef({b, t, f}));
+  DOCTEST_CHECK(dy.sizes() == torch::IntArrayRef({b, t, f}));
   auto dec_fn = [&](const at::Tensor& zin) { return dec->decode(zin); };
   auto ref = eegexpcpp::jvp(dec_fn, z, dz_pred).second;
   check_close(dy, ref, 1e-5, 1e-6, "decoder dY_pred matches JVP");
 }
 
-TEST_CASE("h5 loader") {
+DOCTEST_TEST_CASE("h5 loader") {
   const int f_dim = 5;
   const int t_dim = 11;
   const auto path = temp_h5_path();
   write_test_h5(path, f_dim, t_dim);
   auto [x, dx] = eegexpcpp::load_h5_pair_btf(path, "0");
-  CHECK(x.dim() == 3);
-  CHECK(x.size(0) == 1);
-  CHECK(x.size(1) == t_dim);
-  CHECK(x.size(2) == f_dim);
+  DOCTEST_CHECK(x.dim() == 3);
+  DOCTEST_CHECK(x.size(0) == 1);
+  DOCTEST_CHECK(x.size(1) == t_dim);
+  DOCTEST_CHECK(x.size(2) == f_dim);
   const float expect = 0.01f * 0 + 0.1f * 3;
-  CHECK(std::abs(x.index({0, 3, 0}).item<float>() - expect) < 1e-5f);
+  DOCTEST_CHECK(std::abs(x.index({0, 3, 0}).item<float>() - expect) < 1e-5f);
   const auto [mean, std] = eegexpcpp::load_h5_z_affine(path, "0");
-  CHECK(mean == doctest::Approx(1.5f));
-  CHECK(std == doctest::Approx(2.0f));
+  DOCTEST_CHECK(mean == doctest::Approx(1.5f));
+  DOCTEST_CHECK(std == doctest::Approx(2.0f));
   std::filesystem::remove(path);
 }
 
-TEST_CASE("latent z affine broadcast") {
+DOCTEST_TEST_CASE("latent z affine broadcast") {
   eegexpcpp::ModelConfig mcfg;
   mcfg.n_latent = 3;
   mcfg.feature_dim = 5;
@@ -227,7 +228,7 @@ TEST_CASE("latent z affine broadcast") {
               1e-7, "dz_phys = dz*scale");
 }
 
-TEST_CASE("encoder jvp cuda dx on cpu") {
+DOCTEST_TEST_CASE("encoder jvp cuda dx on cpu") {
   if (!torch::cuda::is_available()) {
     return;
   }
@@ -241,34 +242,34 @@ TEST_CASE("encoder jvp cuda dx on cpu") {
   auto x = torch::randn({b, t, f}, torch::TensorOptions().device(torch::kCUDA));
   auto dx = torch::randn({b, t, f});
   auto [z, dz] = enc->forward(x, dx);
-  CHECK(z.device().is_cuda());
-  CHECK(dz.device().is_cuda());
+  DOCTEST_CHECK(z.device().is_cuda());
+  DOCTEST_CHECK(dz.device().is_cuda());
 }
 
-TEST_CASE("sindy feature library names") {
+DOCTEST_TEST_CASE("sindy feature library names") {
   eegexpcpp::SindyLibraryConfig poly;
   poly.kind = eegexpcpp::SindyLibraryConfig::Kind::Poly;
   poly.poly.degree = 1;
   eegexpcpp::SindyFeatureLibrary lib(2, {poly});
-  CHECK(lib.size() == 3);
+  DOCTEST_CHECK(lib.size() == 3);
   const auto& names = lib.feature_names();
-  CHECK(names[0] == "1");
-  CHECK(names[1] == "x0");
-  CHECK(names[2] == "x1");
+  DOCTEST_CHECK(names[0] == "1");
+  DOCTEST_CHECK(names[1] == "x0");
+  DOCTEST_CHECK(names[2] == "x1");
 }
 
-TEST_CASE("sindy poly feature count") {
+DOCTEST_TEST_CASE("sindy poly feature count") {
   eegexpcpp::PolyLibraryConfig poly;
-  CHECK(eegexpcpp::poly_feature_count(2, poly) == 6);
+  DOCTEST_CHECK(eegexpcpp::poly_feature_count(2, poly) == 6);
   poly.include_interaction = false;
-  CHECK(eegexpcpp::poly_feature_count(2, poly) == 5);
+  DOCTEST_CHECK(eegexpcpp::poly_feature_count(2, poly) == 5);
   poly.interaction_only = true;
   poly.include_interaction = true;
   poly.degree = 2;
-  CHECK(eegexpcpp::poly_feature_count(3, poly) == 7);
+  DOCTEST_CHECK(eegexpcpp::poly_feature_count(3, poly) == 7);
 }
 
-TEST_CASE("sindy ode forward") {
+DOCTEST_TEST_CASE("sindy ode forward") {
   torch::manual_seed(5);
   const int64_t b = 1;
   const int64_t t = 4;
@@ -282,12 +283,12 @@ TEST_CASE("sindy ode forward") {
   eegexpcpp::Ode ode(l, ocfg);
   auto z = torch::randn({b, t, l});
   auto dz = ode->forward(z);
-  CHECK(dz.sizes() == torch::IntArrayRef({b, t, l}));
+  DOCTEST_CHECK(dz.sizes() == torch::IntArrayRef({b, t, l}));
   const int64_t f = eegexpcpp::poly_feature_count(l, poly.poly);
-  CHECK(f == 3);
+  DOCTEST_CHECK(f == 3);
 }
 
-TEST_CASE("latent forward sindy") {
+DOCTEST_TEST_CASE("latent forward sindy") {
   torch::manual_seed(6);
   const int64_t b = 1;
   const int64_t t = 5;
@@ -306,13 +307,13 @@ TEST_CASE("latent forward sindy") {
   auto x = torch::randn({b, t, f});
   auto dx = torch::randn({b, t, f});
   auto out = model->forward(x, dx);
-  CHECK(out.dz_pred.sizes() == torch::IntArrayRef({b, t, l}));
+  DOCTEST_CHECK(out.dz_pred.sizes() == torch::IntArrayRef({b, t, l}));
   eegexpcpp::LossConfig lcfg;
   auto total = model->total_loss(model->compute_losses(out, x, dx, lcfg), lcfg);
-  CHECK(std::isfinite(total.item<double>()));
+  DOCTEST_CHECK(std::isfinite(total.item<double>()));
 }
 
-TEST_CASE("sindy xi starts at zero") {
+DOCTEST_TEST_CASE("sindy xi starts at zero") {
   eegexpcpp::OdeConfig ocfg;
   ocfg.type = eegexpcpp::OdeType::Sindy;
   eegexpcpp::SindyLibraryConfig poly;
@@ -320,68 +321,59 @@ TEST_CASE("sindy xi starts at zero") {
   poly.poly.degree = 1;
   ocfg.libraries.push_back(poly);
   eegexpcpp::OdeSindy sindy(2, ocfg.libraries);
-  CHECK(torch::allclose(sindy->xi_matrix(), torch::zeros({3, 2})));
+  DOCTEST_CHECK(torch::allclose(sindy->xi_matrix(), torch::zeros({3, 2})));
 }
 
-TEST_CASE("sindy stlsq nnz on xi matrix") {
-  torch::manual_seed(22);
-  const int64_t n = 128;
-  const int64_t f = 10;
-  const int64_t l = 3;
-  auto theta = torch::randn({n, f});
-  auto xi_true = torch::zeros({f, l});
-  xi_true[2][0] = 1.2;
-  xi_true[5][1] = -0.8;
-  xi_true[1][2] = 0.5;
-  auto dz = theta.mm(xi_true);
-  const auto fit =
-      eegexpcpp::sindy_stlsq_fit(theta, dz, 0.05, 25, 1e-8);
-  CHECK(fit.xi.size(0) == f);
-  CHECK(fit.xi.size(1) == l);
-  CHECK(fit.nnz >= 1);
-  CHECK(fit.nnz <= f * l);
+DOCTEST_TEST_CASE("sindy xi apply threshold") {
+  auto xi = torch::tensor({{0.2, 0.01}, {-0.15, 0.3}});
+  const auto out = eegexpcpp::xi_apply_threshold(xi, 0.1);
+  DOCTEST_CHECK(out[0][0].item<double>() == doctest::Approx(0.2));
+  DOCTEST_CHECK(out[0][1].item<double>() == doctest::Approx(0.0));
+  DOCTEST_CHECK(out[1][0].item<double>() == doctest::Approx(-0.15));
+  DOCTEST_CHECK(eegexpcpp::xi_count_nnz(out, 0.1) == 3);
 }
 
-TEST_CASE("sindy stlsq cuda train layout") {
-  if (!torch::cuda::is_available()) {
-    MESSAGE("cuda unavailable, skip");
-    return;
+DOCTEST_TEST_CASE("sindy xi frozen trainable mask") {
+  auto trainable = torch::ones({2, 2});
+  const auto pruned =
+      eegexpcpp::xi_apply_threshold(torch::tensor({{0.2, 0.01}, {0.0, 0.3}}),
+                                    0.1);
+  eegexpcpp::xi_shrink_trainable_mask(trainable, pruned, 0.1);
+  DOCTEST_CHECK(trainable[0][0].item<double>() == doctest::Approx(1.0));
+  DOCTEST_CHECK(trainable[0][1].item<double>() == doctest::Approx(0.0));
+  auto xi = torch::tensor({{0.2, 0.05}, {0.02, 0.3}}, torch::requires_grad());
+  {
+    torch::NoGradGuard no_grad;
+    xi.mul_(trainable);
   }
-  torch::manual_seed(33);
-  const int64_t n = 256;
-  const int64_t f = 10;
-  const int64_t l = 3;
-  const auto device = torch::Device(torch::kCUDA);
-  auto theta = torch::randn({n, f}, device);
-  auto xi_true = torch::zeros({f, l});
-  xi_true[3][1] = -1.0;
-  auto dz = theta.mm(xi_true.to(device));
-  const auto fit = eegexpcpp::sindy_stlsq_fit(theta, dz, 0.05, 25, 1e-8);
-  CHECK(fit.xi.device().is_cuda());
-  CHECK(fit.xi.size(0) == f);
-  CHECK(fit.xi.size(1) == l);
-  CHECK(fit.nnz >= 0);
+  xi.sum().backward();
+  eegexpcpp::xi_apply_trainable_mask(xi, trainable);
+  DOCTEST_CHECK(xi[0][1].item<double>() == doctest::Approx(0.0));
+  DOCTEST_CHECK(xi.grad()[0][1].item<double>() == doctest::Approx(0.0));
 }
 
-TEST_CASE("sindy stlsq sparse column") {
-  torch::manual_seed(11);
-  const int64_t n = 200;
-  const int64_t f = 6;
-  auto theta = torch::randn({n, f});
-  auto xi_true = torch::zeros({f, 1});
-  xi_true[1] = 2.0;
-  xi_true[4] = -1.5;
-  auto dz = theta.mm(xi_true);
-  const auto fit =
-      eegexpcpp::sindy_stlsq_fit(theta, dz, 0.05, 25, 1e-8);
-  CHECK(fit.xi.size(0) == f);
-  CHECK(fit.xi.size(1) == 1);
-  CHECK(fit.nnz == 2);
-  CHECK(std::abs(fit.xi[1].item<double>() - 2.0) < 0.15);
-  CHECK(std::abs(fit.xi[4].item<double>() + 1.5) < 0.15);
+DOCTEST_TEST_CASE("sindy prune xi trainable buffer") {
+  eegexpcpp::OdeConfig ocfg;
+  ocfg.type = eegexpcpp::OdeType::Sindy;
+  eegexpcpp::SindyLibraryConfig poly;
+  poly.kind = eegexpcpp::SindyLibraryConfig::Kind::Poly;
+  poly.poly.degree = 1;
+  ocfg.libraries.push_back(poly);
+  eegexpcpp::OdeSindy sindy(2, ocfg.libraries);
+  const auto xi = torch::tensor({{0.2, 0.01}, {-0.15, 0.3}, {0.0, 0.5}});
+  sindy->set_xi_matrix(xi);
+  sindy->prune_xi(0.1);
+  DOCTEST_CHECK(sindy->xi_nnz(0.1) == 4);
+  DOCTEST_CHECK(sindy->xi_matrix()[0][1].item<double>() == doctest::Approx(0.0));
+  for (const auto& pair : sindy->named_parameters()) {
+    if (pair.key() == "xi") {
+      DOCTEST_CHECK(pair.value()[0][1].item<double>() == doctest::Approx(0.0));
+      break;
+    }
+  }
 }
 
-TEST_CASE("sindy set xi matrix") {
+DOCTEST_TEST_CASE("sindy set xi matrix") {
   eegexpcpp::OdeConfig ocfg;
   ocfg.type = eegexpcpp::OdeType::Sindy;
   eegexpcpp::SindyLibraryConfig poly;
@@ -391,10 +383,10 @@ TEST_CASE("sindy set xi matrix") {
   eegexpcpp::OdeSindy sindy(2, ocfg.libraries);
   auto xi = torch::ones({3, 2}) * 0.25;
   sindy->set_xi_matrix(xi);
-  CHECK(torch::allclose(sindy->xi_matrix(), xi));
+  DOCTEST_CHECK(torch::allclose(sindy->xi_matrix(), xi));
 }
 
-TEST_CASE("sindy coefficients table") {
+DOCTEST_TEST_CASE("sindy coefficients table") {
   torch::manual_seed(7);
   eegexpcpp::ModelConfig mcfg;
   mcfg.n_latent = 2;
@@ -409,16 +401,52 @@ TEST_CASE("sindy coefficients table") {
   eegexpcpp::LatentAeOde model(mcfg);
   const auto table =
       eegexpcpp::build_sindy_coefficients_table(model, mcfg);
-  CHECK(table.features.size() == 3);
-  CHECK(table.latent_labels.size() == 2);
-  CHECK(table.xi.size() == 6);
+  DOCTEST_CHECK(table.features.size() == 3);
+  DOCTEST_CHECK(table.latent_labels.size() == 2);
+  DOCTEST_CHECK(table.xi.size() == 6);
 }
 
-TEST_CASE("config json") {
+DOCTEST_TEST_CASE("sindy enforce trainable mask after prune") {
+  eegexpcpp::OdeConfig ocfg;
+  ocfg.type = eegexpcpp::OdeType::Sindy;
+  eegexpcpp::SindyLibraryConfig poly;
+  poly.kind = eegexpcpp::SindyLibraryConfig::Kind::Poly;
+  poly.poly.degree = 1;
+  ocfg.libraries.push_back(poly);
+  eegexpcpp::OdeSindy sindy(2, ocfg.libraries);
+  const auto xi = torch::tensor({{0.2, 0.01}, {-0.15, 0.3}, {0.0, 0.5}});
+  sindy->set_xi_matrix(xi);
+  sindy->prune_xi(0.1);
+  torch::Tensor xi_param;
+  for (auto& pair : sindy->named_parameters()) {
+    if (pair.key() == "xi") {
+      xi_param = pair.value();
+      break;
+    }
+  }
+  DOCTEST_REQUIRE(xi_param.defined());
+  {
+    torch::NoGradGuard no_grad;
+    xi_param[0][1] = 0.42;
+  }
+  sindy->enforce_trainable_mask();
+  DOCTEST_REQUIRE(sindy->xi_matrix()[0][1].item<double>() == doctest::Approx(0.0));
+  DOCTEST_REQUIRE(xi_param[0][1].item<double>() == doctest::Approx(0.0));
+}
+
+DOCTEST_TEST_CASE("xi prune due global epoch") {
+  DOCTEST_CHECK_FALSE(eegexpcpp::xi_prune_due_epoch(9698, 3000));
+  DOCTEST_CHECK(eegexpcpp::xi_prune_due_epoch(2999, 3000));
+  DOCTEST_CHECK(eegexpcpp::xi_prune_due_epoch(8999, 3000));
+  DOCTEST_CHECK_FALSE(eegexpcpp::xi_prune_due_epoch(9700, 3000));
+  DOCTEST_CHECK_FALSE(eegexpcpp::xi_prune_due_epoch(199, 3000));
+}
+
+DOCTEST_TEST_CASE("config json") {
   const auto path = std::filesystem::path(__FILE__).parent_path().parent_path() /
                     "configs" / "latent_ae_ode.lorenz.json";
   const auto cfg = eegexpcpp::load_config(path.string());
-  CHECK(cfg.train.lr > 0.0);
-  CHECK(!cfg.data.h5_path.empty());
-  CHECK(cfg.model.n_latent == 3);
+  DOCTEST_CHECK(cfg.train.lr > 0.0);
+  DOCTEST_CHECK(!cfg.data.h5_path.empty());
+  DOCTEST_CHECK(cfg.model.n_latent == 3);
 }

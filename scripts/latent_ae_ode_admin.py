@@ -99,13 +99,22 @@ def _infer_lib_stamp() -> str:
     return f"{lib}:{lib.stat().st_mtime_ns}"
 
 
+def _session_stamp(config_path: str) -> str:
+    """Cache bust: infer .so and checkpoint weights."""
+    stamp = _infer_lib_stamp()
+    ckpt = describe_config(Path(config_path)).checkpoint_path
+    if ckpt and ckpt.is_file():
+        stamp = f"{stamp}|{ckpt}:{ckpt.stat().st_mtime_ns}"
+    return stamp
+
+
 @st.cache_resource
-def load_session(config_path: str, dev: str, infer_stamp: str) -> InferSession:
+def load_session(config_path: str, dev: str, session_stamp: str) -> InferSession:
     return InferSession(config_path, device=dev)
 
 
 @st.cache_resource
-def load_ode_session(config_path: str, infer_stamp: str) -> InferSession:
+def load_ode_session(config_path: str, session_stamp: str) -> InferSession:
     """CPU-only session for RK4 (many small ode_rhs calls)."""
     return InferSession(config_path, device="cpu")
 
@@ -119,7 +128,7 @@ def compute_arrays(
     chunk_n: int,
 ) -> dict[str, np.ndarray | float | int]:
     dt_local = 1.0 / fs_hz
-    stamp = _infer_lib_stamp()
+    stamp = _session_stamp(config_path)
     session = load_session(config_path, dev, stamp)
     ode_session = session if dev == "cpu" else load_ode_session(config_path, stamp)
     out = session.forward(split_name)
@@ -175,18 +184,42 @@ def _downsample(a: np.ndarray) -> np.ndarray:
 
 
 def _latent_3d_figure(
-    series: list[tuple[np.ndarray, str, str]],
+    series: list[tuple[np.ndarray, str, str, int | None]],
     title: str,
 ) -> go.Figure:
-    """Each item: (z [T,L], legend name, line color)."""
+    """Each item: (z [T,L], legend name, line color, chunk_n or None)."""
     fig = go.Figure()
-    for arr, name, color in series:
-        pts = _downsample(arr)
+    step = sl.step or 1
+    for arr, name, color, chunk_n in series:
+        if chunk_n is not None and chunk_n > 0:
+            xs: list[float] = []
+            ys: list[float] = []
+            zs: list[float] = []
+            t_len = arr.shape[0]
+            for t0 in range(0, t_len, chunk_n):
+                t1 = min(t_len, t0 + chunk_n)
+                seg = arr[t0:t1:step]
+                if seg.shape[0] == 0:
+                    continue
+                xs.extend(seg[:, 0].tolist())
+                ys.extend(seg[:, 1].tolist())
+                zs.extend(seg[:, 2].tolist())
+                xs.append(float("nan"))
+                ys.append(float("nan"))
+                zs.append(float("nan"))
+            if xs and np.isnan(xs[-1]):
+                xs.pop()
+                ys.pop()
+                zs.pop()
+            pts_x, pts_y, pts_z = xs, ys, zs
+        else:
+            pts = _downsample(arr)
+            pts_x, pts_y, pts_z = pts[:, 0], pts[:, 1], pts[:, 2]
         fig.add_trace(
             go.Scatter3d(
-                x=pts[:, 0],
-                y=pts[:, 1],
-                z=pts[:, 2],
+                x=pts_x,
+                y=pts_y,
+                z=pts_z,
                 mode="lines",
                 name=name,
                 line=dict(width=3, color=color),
@@ -203,9 +236,7 @@ def _latent_3d_figure(
     return fig
 
 
-with entry.path.open(encoding="utf-8") as cfg_f:
-    _ode_type = json.load(cfg_f).get("model", {}).get("ode", {}).get("type", "nn")
-_is_sindy = _ode_type == "sindy"
+_is_sindy = entry.ode_type == "sindy"
 
 _tab_labels = ["Реконструкція", "Латент 3D", "RK4 (повний)", "RK4 (шматки)"]
 if _is_sindy:
@@ -262,9 +293,9 @@ with tab_3d:
         st.plotly_chart(
             _latent_3d_figure(
                 [
-                    (z, "Z (encoder)", "#636efa"),
-                    (z_full, "RK4 (повний)", "#ef553b"),
-                    (z_chunk, "RK4 (шматки)", "#00cc96"),
+                    (z, "Z (encoder)", "#636efa", None),
+                    (z_full, "RK4 (повний)", "#ef553b", None),
+                    (z_chunk, "RK4 (шматки)", "#00cc96", chunk_samples),
                 ],
                 (
                     "Латент 3D (z0–z2) — "
@@ -340,9 +371,15 @@ with tab_chunk:
 if tab_sindy is not None:
     with tab_sindy:
         try:
-            sindy_session = load_session(str(entry.path), device, _infer_lib_stamp())
+            sindy_session = load_session(
+                str(entry.path), device, _session_stamp(str(entry.path))
+            )
             xi_table = sindy_session.sindy_coefficients_table()
-            st.caption("Коефіцієнти Xi: dZ = Theta(Z) @ Xi (рядок — ознака бібліотеки).")
+            st.caption(
+                "Ефективні коефіцієнти Xi (Ξ⊙mask, як у forward). "
+                f"Prune: |ξ| < {entry.xi_threshold:g} → 0 кожні "
+                f"{entry.xi_prune_every} епох навчання."
+            )
             st.dataframe(xi_table, width="stretch", hide_index=True)
         except (InferError, ValueError) as exc:
             st.error(str(exc))

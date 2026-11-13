@@ -41,19 +41,17 @@ struct SindyLibraryConfig {
   FourierLibraryConfig fourier;
 };
 
-struct SindyStlsqConfig {
-  /// 0 = disabled; else run STLSQ every N epochs after optimizer.step.
-  int64_t every = 0;
+struct SindyXiPruneConfig {
+  /// 0 = disabled; else freeze |xi| < threshold every N epochs.
+  int64_t prune_every = 0;
   double threshold = 0.1;
-  int max_iter = 20;
-  double ridge = 0.0;
 };
 
 struct OdeConfig {
   OdeType type = OdeType::Nn;
   OdeNnConfig nn;
   std::vector<SindyLibraryConfig> libraries;
-  SindyStlsqConfig stlsq;
+  SindyXiPruneConfig xi_prune;
 };
 
 struct ModelConfig {
