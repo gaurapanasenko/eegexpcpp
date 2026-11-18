@@ -91,6 +91,9 @@ CMake (`FetchContent`, v3.11.3 tarball) on configure.
   train `[next_epoch, next_epoch + epochs)`; log `epoch=` is cumulative;
   checkpoint stores `next_epoch` and optional `train_history_*` (metrics
   tensor `[N,7]` float64, events JSON: run_start with train/loss, xi_prune).
+  Same file may hold `best_train` / `best_val` weight snapshots
+  (`best_*_J`, `best_*_epoch`); train resume uses latest weights;
+  infer `weight_slot` or admin selector can load a snapshot.
   Metrics buffer preallocated per run; truncated on save. Ctrl+C saves
   checkpoint for resume.
   On resume, Adam momentum from checkpoint; `lr` and `weight_decay` from

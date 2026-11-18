@@ -15,6 +15,7 @@
 #include "eegexpcpp/decoder.hpp"
 #include "eegexpcpp/encoder.hpp"
 #include "eegexpcpp/jvp.hpp"
+#include "eegexpcpp/checkpoint.hpp"
 #include "eegexpcpp/latent_ae_ode.hpp"
 #include "eegexpcpp/mlp.hpp"
 #include "eegexpcpp/ode.hpp"
@@ -461,6 +462,47 @@ DOCTEST_TEST_CASE("xi prune due global epoch") {
   DOCTEST_CHECK(eegexpcpp::xi_prune_due_epoch(8999, 3000));
   DOCTEST_CHECK_FALSE(eegexpcpp::xi_prune_due_epoch(9700, 3000));
   DOCTEST_CHECK_FALSE(eegexpcpp::xi_prune_due_epoch(199, 3000));
+}
+
+DOCTEST_TEST_CASE("checkpoint bests in pt") {
+  eegexpcpp::ModelConfig mcfg;
+  mcfg.feature_dim = 4;
+  mcfg.n_latent = 2;
+  mcfg.encoder_hidden = {8};
+  mcfg.decoder_hidden = {8};
+  eegexpcpp::LatentAeOde model(mcfg);
+  eegexpcpp::CheckpointBests bests;
+  bests.consider_train(3, 0.5, model, mcfg);
+  bests.consider_val(3, 0.7, model, mcfg);
+  double w_before = 0.0;
+  {
+    torch::NoGradGuard no_grad;
+    auto& live = model->named_parameters().front().value();
+    w_before = live.sum().item<double>();
+    live.add_(1.0);
+  }
+
+  const auto path = std::filesystem::temp_directory_path() /
+                    "eegexpcpp_checkpoint_bests_test.pt";
+  eegexpcpp::TrainHistory hist;
+  torch::optim::AdamW opt(model->parameters());
+  eegexpcpp::save_train_checkpoint(path.string(), model, opt, 4, hist, bests);
+
+  eegexpcpp::CheckpointBests loaded;
+  eegexpcpp::load_checkpoint_bests(path.string(), loaded, mcfg);
+  DOCTEST_REQUIRE(loaded.best_train);
+  DOCTEST_REQUIRE(loaded.best_val);
+  DOCTEST_CHECK(loaded.best_train_epoch == 3);
+  DOCTEST_CHECK(loaded.best_val_epoch == 3);
+  DOCTEST_CHECK(loaded.best_train_j == doctest::Approx(0.5));
+  DOCTEST_CHECK(loaded.best_val_j == doctest::Approx(0.7));
+  const double w_live =
+      model->named_parameters().front().value().sum().item<double>();
+  const double w_best =
+      (*loaded.best_train)->named_parameters().front().value().sum().item<double>();
+  DOCTEST_CHECK(w_best == doctest::Approx(w_before));
+  DOCTEST_CHECK(w_live != doctest::Approx(w_before));
+  std::filesystem::remove(path);
 }
 
 DOCTEST_TEST_CASE("config json") {

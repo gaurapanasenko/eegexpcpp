@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `xi_prune_every` / `xi_threshold`: freeze small `ode.sindy.xi` entries
   during train (`xi_trainable` buffer in checkpoint).
 - `model.ode.sigma`: SINDy Xi Normal init std (default `0.1`; `0` = zeros).
+- Checkpoint: `best_train` / `best_val` model weights + epoch + J in the
+  same `.pt` (resume still uses latest weights + optimizer).
+- Infer C API `weight_slot` (`best_train` / `best_val` / `latest`); admin
+  sidebar selector (default best train_J).
 
 ### Changed
 

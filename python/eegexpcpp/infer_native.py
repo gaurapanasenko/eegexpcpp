@@ -40,6 +40,7 @@ class InferSession:
         *,
         device: str = "cpu",
         checkpoint_path: str | Path | None = None,
+        weight_slot: str = "latest",
         lib_path: str | Path | None = None,
     ) -> None:
         lib = CDLL(str(lib_path or default_infer_lib()))
@@ -47,6 +48,7 @@ class InferSession:
         self._handle: c_void_p | None = None
 
         lib.eegexpcpp_infer_create.argtypes = [
+            c_char_p,
             c_char_p,
             c_char_p,
             c_char_p,
@@ -113,6 +115,7 @@ class InferSession:
             cfg.encode("utf-8"),
             ckpt.encode("utf-8") if ckpt else None,
             device.encode("utf-8"),
+            weight_slot.encode("utf-8"),
         )
         if not handle:
             err = lib.eegexpcpp_infer_last_error()

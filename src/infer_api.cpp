@@ -155,7 +155,8 @@ extern "C" {
 
 EegexpcppInferHandle* eegexpcpp_infer_create(const char* config_json_path,
                                              const char* checkpoint_path,
-                                             const char* device) {
+                                             const char* device,
+                                             const char* weight_slot) {
   clear_error();
   if (config_json_path == nullptr) {
     set_error("config_json_path is null");
@@ -199,19 +200,36 @@ EegexpcppInferHandle* eegexpcpp_infer_create(const char* config_json_path,
       resolve_repo_relative(ckpt, cfg_abs);
     }
 
-    torch::optim::AdamW optimizer(
-        s.model->parameters(),
-        torch::optim::AdamWOptions(s.cfg.train.lr));
-    const auto resume =
-        eegexpcpp::try_resume_train(ckpt, s.model, optimizer);
-    if (!resume.resumed) {
-      set_error("checkpoint not found or unloadable: " + ckpt);
-      return nullptr;
+    const eegexpcpp::CheckpointWeightSlot slot =
+        eegexpcpp::parse_checkpoint_weight_slot(weight_slot);
+
+    if (slot == eegexpcpp::CheckpointWeightSlot::Latest) {
+      torch::optim::AdamW optimizer(
+          s.model->parameters(),
+          torch::optim::AdamWOptions(s.cfg.train.lr));
+      const auto resume =
+          eegexpcpp::try_resume_train(ckpt, s.model, optimizer);
+      if (!resume.resumed) {
+        set_error("checkpoint not found or unloadable: " + ckpt);
+        return nullptr;
+      }
+      s.next_epoch = resume.next_epoch;
+    } else {
+      int64_t next_ep = -1;
+      if (!eegexpcpp::load_checkpoint_infer_weights(ckpt, s.model, slot,
+                                                    next_ep)) {
+        const char* key =
+            slot == eegexpcpp::CheckpointWeightSlot::BestTrain ? "best_train"
+                                                               : "best_val";
+        set_error(std::string("checkpoint missing ") + key + " weights: " +
+                  ckpt);
+        return nullptr;
+      }
+      s.next_epoch = next_ep;
     }
     const auto [z_mean, z_std] = eegexpcpp::load_h5_z_affine(
         s.cfg.data.h5_path, s.cfg.data.h5_group);
     s.model->set_latent_z_affine(z_mean, z_std);
-    s.next_epoch = resume.next_epoch;
     s.model->to(s.device);
     s.model->eval();
     ensure_ode_work_tensors(s);

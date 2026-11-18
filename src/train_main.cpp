@@ -135,6 +135,10 @@ int main(int argc, char** argv) {
   if (resume.resumed) {
     history.load_from_checkpoint_file(ckpt_path);
   }
+  eegexpcpp::CheckpointBests bests;
+  if (fs::exists(ckpt_path)) {
+    eegexpcpp::load_checkpoint_bests(ckpt_path, bests, model_cfg);
+  }
   history.begin_run(epoch_begin, epoch_end, cfg.train.log_every, cfg.train,
                     cfg.loss);
 
@@ -149,7 +153,7 @@ int main(int argc, char** argv) {
       model->ode_module()->sindy()->enforce_trainable_mask();
     }
     eegexpcpp::save_train_checkpoint(ckpt_path, model, optimizer, next_epoch,
-                                     history);
+                                     history, bests);
     std::cout << reason << "saved " << ckpt_path
               << " next_epoch=" << next_epoch << '\n';
   };
@@ -202,6 +206,8 @@ int main(int argc, char** argv) {
       const double j_z1 = losses.at("J_z_1").item<double>();
       print_loss_row(epoch_w, epoch, train_j, val_j, j_y, j_dy, j_dz, j_z1);
       history.append_loss_row(epoch, train_j, val_j, j_y, j_dy, j_dz, j_z1);
+      bests.consider_train(epoch, train_j, model, model_cfg);
+      bests.consider_val(epoch, val_j, model, model_cfg);
     }
 
     if (g_train_interrupted) {

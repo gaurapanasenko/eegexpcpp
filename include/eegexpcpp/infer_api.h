@@ -17,10 +17,13 @@ typedef struct EegexpcppInferHandle EegexpcppInferHandle;
 
 /// Create session from experiment JSON. checkpoint_path NULL uses
 /// default_checkpoint_path(train.checkpoint_dir). device: "cpu" or "cuda".
+/// weight_slot NULL or "latest": resume weights; "best_train" / "best_val":
+/// snapshot from the same .pt (no optimizer).
 /// Returns NULL on failure; see eegexpcpp_infer_last_error().
 EegexpcppInferHandle* eegexpcpp_infer_create(const char* config_json_path,
                                              const char* checkpoint_path,
-                                             const char* device);
+                                             const char* device,
+                                             const char* weight_slot);
 
 void eegexpcpp_infer_destroy(EegexpcppInferHandle* handle);
 

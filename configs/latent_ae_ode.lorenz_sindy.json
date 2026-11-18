@@ -7,10 +7,10 @@
   "model": {
     "n_latent": 3,
     "encoder_hidden": [64, 32],
-    "encoder_activation": "tanh",
+    "encoder_activation": "gelu",
     "ode": {
       "type": "sindy",
-      "sigma": 0.1,
+      "sigma": 0,
       "libraries": [
         {
           "type": "poly",
@@ -22,15 +22,15 @@
       ]
     },
     "decoder_hidden": [32, 64],
-    "decoder_activation": "tanh"
+    "decoder_activation": "gelu"
   },
   "loss": {
-    "lambda_Y": 1.0,
-    "lambda_dY": 0,
-    "lambda_dZ": 1.0e-1,
-    "lambda_z1": 0.1,
+    "lambda_Y": 1,
+    "lambda_dY": 0.01,
+    "lambda_dZ": 1,
+    "lambda_z1": 1,
     "lambda_l1_ae": 0,
-    "lambda_l1_ode": 1.0e-3
+    "lambda_l1_ode": 1.0e-4
   },
   "train": {
     "epochs": 10000,
@@ -40,10 +40,10 @@
     "adamw_eps": 1.0e-8,
     "grad_clip_norm": 0.0,
     "device": "cuda",
-    "seed": 42,
+    "seed": 43,
     "log_every": 5,
     "checkpoint_dir": "checkpoints/latent_ae_ode_lorenz_sindy",
-    "xi_prune_every": 0,
-    "xi_threshold": 0.01
+    "xi_prune_every": 5000,
+    "xi_threshold": 0.001
   }
 }

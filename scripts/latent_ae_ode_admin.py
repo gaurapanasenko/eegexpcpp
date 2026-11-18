@@ -66,6 +66,20 @@ if entry.is_latent_ae_ode:
     else:
         st.sidebar.error("Чекпоінт відсутній")
 
+_WEIGHT_SLOT_OPTIONS: list[tuple[str, str]] = [
+    ("Найкращий train_J", "best_train"),
+    ("Найкращий val_J", "best_val"),
+    ("Останній (resume)", "latest"),
+]
+_w_idx = st.sidebar.selectbox(
+    "Ваги моделі",
+    range(len(_WEIGHT_SLOT_OPTIONS)),
+    index=0,
+    format_func=lambda i: _WEIGHT_SLOT_OPTIONS[i][0],
+    key=f"weight_slot_{entry.name}",
+)
+weight_slot = _WEIGHT_SLOT_OPTIONS[_w_idx][1]
+
 split = st.sidebar.radio("Дані", ["train", "val", "full"], index=0)
 _device_opts = ("cpu", "cuda")
 _device_idx = (
@@ -114,28 +128,40 @@ def _session_stamp(config_path: str) -> str:
 
 
 @st.cache_resource
-def load_session(config_path: str, dev: str, session_stamp: str) -> InferSession:
-    return InferSession(config_path, device=dev)
+def load_session(
+    config_path: str,
+    dev: str,
+    weights: str,
+    session_stamp: str,
+) -> InferSession:
+    return InferSession(config_path, device=dev, weight_slot=weights)
 
 
 @st.cache_resource
-def load_ode_session(config_path: str, session_stamp: str) -> InferSession:
+def load_ode_session(
+    config_path: str, weights: str, session_stamp: str
+) -> InferSession:
     """CPU-only session for RK4 (many small ode_rhs calls)."""
-    return InferSession(config_path, device="cpu")
+    return InferSession(config_path, device="cpu", weight_slot=weights)
 
 
 @st.cache_data(show_spinner="Forward + RK4…")
 def compute_arrays(
     config_path: str,
     dev: str,
+    weights: str,
     split_name: str,
     fs_hz: float,
     chunk_n: int,
 ) -> dict[str, np.ndarray | float | int]:
     dt_local = 1.0 / fs_hz
     stamp = _session_stamp(config_path)
-    session = load_session(config_path, dev, stamp)
-    ode_session = session if dev == "cpu" else load_ode_session(config_path, stamp)
+    session = load_session(config_path, dev, weights, stamp)
+    ode_session = (
+        session
+        if dev == "cpu"
+        else load_ode_session(config_path, weights, stamp)
+    )
     out = session.forward(split_name)
     z = out["z"]
     z_full = rollout_full(z, ode_session, dt_local)
@@ -152,7 +178,7 @@ def compute_arrays(
 
 try:
     data = compute_arrays(
-        str(entry.path), device, split, fs, chunk_samples
+        str(entry.path), device, weight_slot, split, fs, chunk_samples
     )
 except InferError as exc:
     msg = str(exc)
@@ -166,7 +192,11 @@ except InferError as exc:
         )
     st.stop()
 
-st.caption(f"next_epoch={data['next_epoch']} | split={split} | T={data['x'].shape[0]}")
+_w_label = _WEIGHT_SLOT_OPTIONS[_w_idx][0]
+st.caption(
+    f"ваги={_w_label} | next_epoch={data['next_epoch']} | "
+    f"split={split} | T={data['x'].shape[0]}"
+)
 
 x = data["x"]
 y = data["y"]
@@ -455,7 +485,10 @@ if tab_sindy is not None:
     with tab_sindy:
         try:
             sindy_session = load_session(
-                str(entry.path), device, _session_stamp(str(entry.path))
+                str(entry.path),
+                device,
+                weight_slot,
+                _session_stamp(str(entry.path)),
             )
             xi_table = sindy_session.sindy_coefficients_table()
             st.caption(
