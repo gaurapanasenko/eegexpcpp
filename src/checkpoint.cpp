@@ -49,13 +49,15 @@ ResumeState try_resume_train(const std::string& path,
 void save_train_checkpoint(const std::string& path,
                            const LatentAeOde& model,
                            const torch::optim::AdamW& optimizer,
-                           int64_t next_epoch) {
+                           int64_t next_epoch,
+                           const TrainHistory& history) {
   fs::create_directories(fs::path(path).parent_path());
   torch::serialize::OutputArchive archive(
       std::make_shared<torch::jit::CompilationUnit>());
   archive << model;
   archive << optimizer;
   archive.write("next_epoch", c10::IValue(next_epoch));
+  history.write_to_archive(archive);
   archive.save_to(path);
 }
 

@@ -88,7 +88,10 @@ CMake (`FetchContent`, v3.11.3 tarball) on configure.
   Tensors **`[B,T,F]`** (HDF5 `[F,T]` transposed on load).
 - **Train:** AdamW, all hyperparameters in JSON (`configs/`). Resume:
   train `[next_epoch, next_epoch + epochs)`; log `epoch=` is cumulative;
-  checkpoint stores `next_epoch`. Ctrl+C saves checkpoint for resume.
+  checkpoint stores `next_epoch` and optional `train_history_*` (metrics
+  tensor `[N,7]` float64, events JSON: run_start with train/loss, xi_prune).
+  Metrics buffer preallocated per run; truncated on save. Ctrl+C saves
+  checkpoint for resume.
   On resume, Adam momentum from checkpoint; `lr` and `weight_decay` from
   JSON.
   Train/val: one forward per epoch on full split tensors `[1, T, F]`.

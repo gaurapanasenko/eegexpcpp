@@ -59,6 +59,7 @@ add_library(
   src/decoder.cpp
   src/latent_ae_ode.cpp
   src/checkpoint.cpp
+  src/train_history.cpp
   src/dataset_h5.cpp
 )
 target_include_directories(

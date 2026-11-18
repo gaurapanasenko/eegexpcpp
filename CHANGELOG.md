@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Checkpoint `train_history_*`: loss log rows (`[N,7]` in `.pt`), events
+  JSON; C API `eegexpcpp_checkpoint_history_*`; admin tab «Історія».
 - `xi_prune_every` / `xi_threshold`: freeze small `ode.sindy.xi` entries
   during train (`xi_trainable` buffer in checkpoint).
 

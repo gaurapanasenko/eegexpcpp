@@ -15,6 +15,7 @@
 #include "eegexpcpp/dataset_h5.hpp"
 #include "eegexpcpp/latent_ae_ode.hpp"
 #include "eegexpcpp/sindy_xi.hpp"
+#include "eegexpcpp/train_history.hpp"
 
 namespace fs = std::filesystem;
 
@@ -130,6 +131,13 @@ int main(int argc, char** argv) {
 
   const int epoch_w = epoch_field_width(epoch_end - 1);
 
+  eegexpcpp::TrainHistory history;
+  if (resume.resumed) {
+    history.load_from_checkpoint_file(ckpt_path);
+  }
+  history.begin_run(epoch_begin, epoch_end, cfg.train.log_every, cfg.train,
+                    cfg.loss);
+
   const auto& xi_cfg = cfg.train.xi_prune;
   const bool xi_prune_train = cfg.model.ode.type == eegexpcpp::OdeType::Sindy &&
                               xi_cfg.prune_every > 0;
@@ -140,7 +148,8 @@ int main(int argc, char** argv) {
     if (xi_prune_train) {
       model->ode_module()->sindy()->enforce_trainable_mask();
     }
-    eegexpcpp::save_train_checkpoint(ckpt_path, model, optimizer, next_epoch);
+    eegexpcpp::save_train_checkpoint(ckpt_path, model, optimizer, next_epoch,
+                                     history);
     std::cout << reason << "saved " << ckpt_path
               << " next_epoch=" << next_epoch << '\n';
   };
@@ -170,8 +179,9 @@ int main(int argc, char** argv) {
       if (eegexpcpp::xi_prune_due_epoch(epoch, xi_cfg.prune_every)) {
         torch::NoGradGuard no_grad;
         sindy->prune_xi(xi_cfg.threshold);
-        std::cout << "xi_prune epoch=" << epoch
-                  << " nnz=" << sindy->xi_nnz(xi_cfg.threshold) << '\n';
+        const int64_t nnz = sindy->xi_nnz(xi_cfg.threshold);
+        std::cout << "xi_prune epoch=" << epoch << " nnz=" << nnz << '\n';
+        history.append_xi_prune(epoch, nnz);
       }
     }
 
@@ -184,11 +194,14 @@ int main(int argc, char** argv) {
       auto vtotal = model->total_loss(vlosses, cfg.loss);
       model->train();
 
-      print_loss_row(epoch_w, epoch, loss.item<double>(),
-                     vtotal.item<double>(), losses.at("J_Y").item<double>(),
-                     losses.at("J_dY").item<double>(),
-                     losses.at("J_dZ").item<double>(),
-                     losses.at("J_z_1").item<double>());
+      const double train_j = loss.item<double>();
+      const double val_j = vtotal.item<double>();
+      const double j_y = losses.at("J_Y").item<double>();
+      const double j_dy = losses.at("J_dY").item<double>();
+      const double j_dz = losses.at("J_dZ").item<double>();
+      const double j_z1 = losses.at("J_z_1").item<double>();
+      print_loss_row(epoch_w, epoch, train_j, val_j, j_y, j_dy, j_dz, j_z1);
+      history.append_loss_row(epoch, train_j, val_j, j_y, j_dy, j_dz, j_z1);
     }
 
     if (g_train_interrupted) {

@@ -22,6 +22,11 @@ from eegexpcpp.infer_native import (
     default_infer_lib,
     infer_lib_available,
 )
+from eegexpcpp.checkpoint_history import (
+    METRIC_NAMES,
+    CheckpointHistoryError,
+    load_checkpoint_history,
+)
 from eegexpcpp.latent_rollout import chunk_mse, rollout_chunked, rollout_full
 
 os.chdir(ROOT)
@@ -238,12 +243,18 @@ def _latent_3d_figure(
 
 _is_sindy = entry.ode_type == "sindy"
 
-_tab_labels = ["Реконструкція", "Латент 3D", "RK4 (повний)", "RK4 (шматки)"]
+_tab_labels = [
+    "Реконструкція",
+    "Латент 3D",
+    "RK4 (повний)",
+    "RK4 (шматки)",
+    "Історія",
+]
 if _is_sindy:
     _tab_labels.append("SINDy Xi")
 _tabs = st.tabs(_tab_labels)
-tab_rec, tab_3d, tab_rk4, tab_chunk = _tabs[:4]
-tab_sindy = _tabs[4] if _is_sindy else None
+tab_rec, tab_3d, tab_rk4, tab_chunk, tab_hist = _tabs[:5]
+tab_sindy = _tabs[5] if _is_sindy else None
 
 with tab_rec:
     fig = go.Figure()
@@ -367,6 +378,78 @@ with tab_chunk:
         width="stretch",
         hide_index=True,
     )
+
+with tab_hist:
+    try:
+        hist = load_checkpoint_history(entry.checkpoint_path)
+    except CheckpointHistoryError as exc:
+        st.error(str(exc))
+    else:
+        if hist.metrics.size == 0 and not hist.events:
+            st.info(
+                "У чекпоінті ще немає train_history (запустіть train після "
+                "оновлення)."
+            )
+        else:
+            if hist.metrics.size:
+                epochs = hist.metrics[:, 0]
+                fig_h = go.Figure()
+                for j, name in enumerate(METRIC_NAMES[1:], start=1):
+                    fig_h.add_trace(
+                        go.Scatter(x=epochs, y=hist.metrics[:, j], name=name)
+                    )
+                fig_h.update_layout(
+                    title="Метрики з print_loss_row",
+                    xaxis_title="epoch",
+                    height=480,
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02),
+                )
+                st.plotly_chart(fig_h, width="stretch")
+            _loss_cols = (
+                "lambda_Y",
+                "lambda_dY",
+                "lambda_dZ",
+                "lambda_z1",
+                "lambda_l1_ae",
+                "lambda_l1_ode",
+            )
+
+            def _event_row(ev: dict) -> dict | None:
+                typ = ev.get("type")
+                if typ == "run_start":
+                    tr = ev.get("train", {})
+                    ls = ev.get("loss", {})
+                    row = {
+                        "type": typ,
+                        "epoch": ev.get("epoch_begin"),
+                        "nnz": None,
+                        "lr": tr.get("lr"),
+                        "xi_prune_every": tr.get("xi_prune_every"),
+                        "xi_threshold": tr.get("xi_threshold"),
+                    }
+                    for k in _loss_cols:
+                        row[k] = ls.get(k)
+                    return row
+                if typ == "xi_prune":
+                    row = {
+                        "type": typ,
+                        "epoch": ev.get("epoch"),
+                        "nnz": ev.get("nnz"),
+                        "lr": None,
+                        "xi_prune_every": None,
+                        "xi_threshold": None,
+                    }
+                    for k in _loss_cols:
+                        row[k] = None
+                    return row
+                return None
+
+            rows = [r for ev in hist.events if (r := _event_row(ev)) is not None]
+            if rows:
+                st.markdown("**Події (run_start / xi_prune)**")
+                st.dataframe(rows, width="stretch", hide_index=True)
+            with st.expander("Повний JSON подій"):
+                st.json(hist.events)
 
 if tab_sindy is not None:
     with tab_sindy:

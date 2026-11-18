@@ -6,6 +6,7 @@
 #include <torch/torch.h>
 
 #include "eegexpcpp/latent_ae_ode.hpp"
+#include "eegexpcpp/train_history.hpp"
 
 namespace eegexpcpp {
 
@@ -24,6 +25,7 @@ ResumeState try_resume_train(const std::string& path,
 void save_train_checkpoint(const std::string& path,
                            const LatentAeOde& model,
                            const torch::optim::AdamW& optimizer,
-                           int64_t next_epoch);
+                           int64_t next_epoch,
+                           const TrainHistory& history);
 
 }  // namespace eegexpcpp

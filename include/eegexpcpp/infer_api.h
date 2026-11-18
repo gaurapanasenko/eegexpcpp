@@ -74,6 +74,24 @@ int eegexpcpp_infer_sindy_csv(const EegexpcppInferHandle* handle,
                               char* buf,
                               int64_t buf_len);
 
+/// Train history stored in checkpoint archive (metrics + events JSON).
+int64_t eegexpcpp_checkpoint_history_metric_rows(const char* checkpoint_path);
+
+int eegexpcpp_checkpoint_history_metric_cols(void);
+
+/// Row-major float64; returns 0 on success. buf_len >= rows*cols.
+int eegexpcpp_checkpoint_history_metric_copy(const char* checkpoint_path,
+                                             double* buf,
+                                             int64_t buf_len);
+
+int64_t eegexpcpp_checkpoint_history_events_json_size(
+    const char* checkpoint_path);
+
+/// buf_len >= size from size(); includes trailing '\\0'. Returns 0 on success.
+int eegexpcpp_checkpoint_history_events_json(const char* checkpoint_path,
+                                             char* buf,
+                                             int64_t buf_len);
+
 #ifdef __cplusplus
 }
 #endif

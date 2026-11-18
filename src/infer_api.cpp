@@ -16,6 +16,7 @@
 #include "eegexpcpp/latent_ae_ode.hpp"
 #include "eegexpcpp/rk4.hpp"
 #include "eegexpcpp/sindy_table.hpp"
+#include "eegexpcpp/train_history.hpp"
 
 namespace {
 
@@ -431,6 +432,118 @@ int eegexpcpp_infer_sindy_csv(const EegexpcppInferHandle* handle,
       return -1;
     }
     std::memcpy(buf, csv.c_str(), csv.size() + 1);
+    return 0;
+  } catch (const std::exception& e) {
+    set_error(e.what());
+    return -1;
+  }
+}
+
+int64_t eegexpcpp_checkpoint_history_metric_rows(
+    const char* checkpoint_path) {
+  clear_error();
+  if (checkpoint_path == nullptr) {
+    set_error("null checkpoint_path");
+    return -1;
+  }
+  try {
+    torch::Tensor metrics;
+    std::string events;
+    if (!eegexpcpp::read_checkpoint_train_history(checkpoint_path, metrics,
+                                                  events)) {
+      set_error("cannot read checkpoint history");
+      return -1;
+    }
+    return metrics.size(0);
+  } catch (const std::exception& e) {
+    set_error(e.what());
+    return -1;
+  }
+}
+
+int eegexpcpp_checkpoint_history_metric_cols(void) {
+  return static_cast<int>(eegexpcpp::kTrainHistoryMetricCols);
+}
+
+int eegexpcpp_checkpoint_history_metric_copy(const char* checkpoint_path,
+                                             double* buf,
+                                             int64_t buf_len) {
+  clear_error();
+  if (checkpoint_path == nullptr || buf == nullptr) {
+    set_error("null checkpoint_path or buffer");
+    return -1;
+  }
+  try {
+    torch::Tensor metrics;
+    std::string events;
+    if (!eegexpcpp::read_checkpoint_train_history(checkpoint_path, metrics,
+                                                  events)) {
+      set_error("cannot read checkpoint history");
+      return -1;
+    }
+    const int64_t rows = metrics.size(0);
+    const int64_t cols = eegexpcpp::kTrainHistoryMetricCols;
+    const int64_t need = rows * cols;
+    if (buf_len < need) {
+      set_error("metric buffer too small");
+      return -1;
+    }
+    if (need == 0) {
+      return 0;
+    }
+    auto flat = metrics.to(torch::kFloat64).contiguous().view({-1});
+    std::memcpy(buf, flat.data_ptr<double>(),
+                static_cast<size_t>(need) * sizeof(double));
+    return 0;
+  } catch (const std::exception& e) {
+    set_error(e.what());
+    return -1;
+  }
+}
+
+int64_t eegexpcpp_checkpoint_history_events_json_size(
+    const char* checkpoint_path) {
+  clear_error();
+  if (checkpoint_path == nullptr) {
+    set_error("null checkpoint_path");
+    return -1;
+  }
+  try {
+    torch::Tensor metrics;
+    std::string events;
+    if (!eegexpcpp::read_checkpoint_train_history(checkpoint_path, metrics,
+                                                  events)) {
+      set_error("cannot read checkpoint history");
+      return -1;
+    }
+    return static_cast<int64_t>(events.size() + 1);
+  } catch (const std::exception& e) {
+    set_error(e.what());
+    return -1;
+  }
+}
+
+int eegexpcpp_checkpoint_history_events_json(const char* checkpoint_path,
+                                             char* buf,
+                                             int64_t buf_len) {
+  clear_error();
+  if (checkpoint_path == nullptr || buf == nullptr || buf_len < 1) {
+    set_error("invalid events buffer");
+    return -1;
+  }
+  try {
+    torch::Tensor metrics;
+    std::string events;
+    if (!eegexpcpp::read_checkpoint_train_history(checkpoint_path, metrics,
+                                                  events)) {
+      set_error("cannot read checkpoint history");
+      return -1;
+    }
+    if (buf_len < static_cast<int64_t>(events.size() + 1)) {
+      set_error("events buffer too small");
+      return -1;
+    }
+    std::memcpy(buf, events.c_str(), events.size() + 1);
     return 0;
   } catch (const std::exception& e) {
     set_error(e.what());

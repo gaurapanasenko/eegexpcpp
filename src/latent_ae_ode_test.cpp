@@ -22,6 +22,7 @@
 #include "eegexpcpp/rk4.hpp"
 #include "eegexpcpp/sindy_library.hpp"
 #include "eegexpcpp/sindy_xi.hpp"
+#include "eegexpcpp/train_history.hpp"
 #include "eegexpcpp/sindy_table.hpp"
 
 namespace {
@@ -432,6 +433,25 @@ DOCTEST_TEST_CASE("sindy enforce trainable mask after prune") {
   sindy->enforce_trainable_mask();
   DOCTEST_REQUIRE(sindy->xi_matrix()[0][1].item<double>() == doctest::Approx(0.0));
   DOCTEST_REQUIRE(xi_param[0][1].item<double>() == doctest::Approx(0.0));
+}
+
+DOCTEST_TEST_CASE("planned log rows") {
+  DOCTEST_CHECK(eegexpcpp::planned_log_rows(0, 100, 10) == 11);
+  DOCTEST_CHECK(eegexpcpp::planned_log_rows(10, 20, 3) == 4);
+  DOCTEST_CHECK(eegexpcpp::planned_log_rows(0, 0, 10) == 0);
+}
+
+DOCTEST_TEST_CASE("train history run buffer truncate") {
+  eegexpcpp::TrainHistory hist;
+  eegexpcpp::TrainConfig train;
+  eegexpcpp::LossConfig loss;
+  hist.begin_run(0, 10, 10, train, loss);
+  hist.append_loss_row(0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
+  auto saved = hist.metrics_for_save();
+  DOCTEST_REQUIRE(saved.dim() == 2);
+  DOCTEST_REQUIRE(saved.size(0) == 1);
+  DOCTEST_CHECK(saved[0][0].item<int64_t>() == 0);
+  DOCTEST_CHECK(saved[0][1].item<double>() == doctest::Approx(1.0));
 }
 
 DOCTEST_TEST_CASE("xi prune due global epoch") {
