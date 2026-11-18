@@ -34,16 +34,16 @@
   },
   "train": {
     "epochs": 10000,
-    "lr": 1.0e-3,
+    "lr": 1.0e-4,
     "weight_decay": 0.01,
     "adamw_betas": [0.9, 0.999],
     "adamw_eps": 1.0e-8,
     "grad_clip_norm": 0.0,
     "device": "cuda",
     "seed": 43,
-    "log_every": 5,
+    "log_every": 1000,
     "checkpoint_dir": "checkpoints/latent_ae_ode_lorenz_sindy",
     "xi_prune_every": 5000,
-    "xi_threshold": 0.001
+    "xi_threshold": 0.01
   }
 }

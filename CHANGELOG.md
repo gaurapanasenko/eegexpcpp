@@ -7,10 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [draft]
 
-- `docs/latent_ae_ode_math.md`: formulas for Latent AE+ODE C++ path
-  (data layout, JVP, ODE/SINDy, loss, RK4).
+## [0.7.0] - 2026-11-18
 
 ### Added
+
+- `docs/latent_ae_ode_math.md`: formulas for Latent AE+ODE C++ path
+  (data layout, JVP, ODE/SINDy, loss, RK4).
 
 - Checkpoint `train_history_*`: loss log rows (`[N,7]` in `.pt`), events
   JSON; C API `eegexpcpp_checkpoint_history_*`; admin tab «Історія».
