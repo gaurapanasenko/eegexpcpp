@@ -79,15 +79,6 @@ ExperimentConfig load_config(const std::string& path) {
     if (cfg.model.ode.libraries.empty()) {
       throw std::runtime_error("sindy ode requires non-empty libraries");
     }
-    auto& xp = cfg.model.ode.xi_prune;
-    xp.prune_every = jo.value("xi_prune_every", xp.prune_every);
-    xp.threshold = jo.value("xi_threshold", xp.threshold);
-    if (xp.prune_every < 0) {
-      throw std::runtime_error("xi_prune_every must be non-negative");
-    }
-    if (xp.threshold < 0.0) {
-      throw std::runtime_error("xi_threshold must be non-negative");
-    }
   } else {
     throw std::runtime_error("unknown ode type: " + ode_type);
   }
@@ -133,6 +124,15 @@ ExperimentConfig load_config(const std::string& path) {
   cfg.train.log_every = jt.value("log_every", cfg.train.log_every);
   cfg.train.checkpoint_dir =
       jt.value("checkpoint_dir", cfg.train.checkpoint_dir);
+  auto& xp = cfg.train.xi_prune;
+  xp.prune_every = jt.value("xi_prune_every", xp.prune_every);
+  xp.threshold = jt.value("xi_threshold", xp.threshold);
+  if (xp.prune_every < 0) {
+    throw std::runtime_error("xi_prune_every must be non-negative");
+  }
+  if (xp.threshold < 0.0) {
+    throw std::runtime_error("xi_threshold must be non-negative");
+  }
 
   return cfg;
 }

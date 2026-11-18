@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `xi_prune_every` / `xi_threshold` moved from `model.ode` to `train` in
+  experiment JSON (`load_config`, admin `describe_config`).
 - Removed in-train SINDy STLSQ and AdamW state resets from `eegexpcpp_train`.
 - `OdeSindy`: `xi_trainable` buffer applied in forward; train calls `prune_xi`
   on schedule; grad clamp + storage zero on frozen entries each step (and

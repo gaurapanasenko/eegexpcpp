@@ -130,7 +130,7 @@ int main(int argc, char** argv) {
 
   const int epoch_w = epoch_field_width(epoch_end - 1);
 
-  const auto& xi_cfg = cfg.model.ode.xi_prune;
+  const auto& xi_cfg = cfg.train.xi_prune;
   const bool xi_prune_train = cfg.model.ode.type == eegexpcpp::OdeType::Sindy &&
                               xi_cfg.prune_every > 0;
 

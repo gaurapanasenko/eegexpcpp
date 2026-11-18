@@ -18,9 +18,7 @@
           "interaction_only": false,
           "include_bias": true
         }
-      ],
-      "xi_prune_every": 3000,
-      "xi_threshold": 0.05
+      ]
     },
     "decoder_hidden": [32, 64],
     "decoder_activation": "tanh"
@@ -29,9 +27,9 @@
     "lambda_Y": 1.0,
     "lambda_dY": 0,
     "lambda_dZ": 1.0e-1,
-    "lambda_z1": 0,
+    "lambda_z1": 0.1,
     "lambda_l1_ae": 0,
-    "lambda_l1_ode": 1.0e-3
+    "lambda_l1_ode": 1.0e-1
   },
   "train": {
     "epochs": 10000,
@@ -43,6 +41,8 @@
     "device": "cuda",
     "seed": 42,
     "log_every": 5,
-    "checkpoint_dir": "checkpoints/latent_ae_ode_lorenz_sindy"
+    "checkpoint_dir": "checkpoints/latent_ae_ode_lorenz_sindy",
+    "xi_prune_every": 3000,
+    "xi_threshold": 0.01
   }
 }

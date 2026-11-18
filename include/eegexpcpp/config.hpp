@@ -51,7 +51,6 @@ struct OdeConfig {
   OdeType type = OdeType::Nn;
   OdeNnConfig nn;
   std::vector<SindyLibraryConfig> libraries;
-  SindyXiPruneConfig xi_prune;
 };
 
 struct ModelConfig {
@@ -86,6 +85,8 @@ struct TrainConfig {
   int64_t seed = 42;
   int64_t log_every = 10;
   std::string checkpoint_dir = "checkpoints";
+  /// SINDy only: freeze |xi| < threshold every N epochs (0 = disabled).
+  SindyXiPruneConfig xi_prune;
 };
 
 struct ExperimentConfig {

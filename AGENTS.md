@@ -79,7 +79,8 @@ CMake (`FetchContent`, v3.11.3 tarball) on configure.
   **`type`** `nn` (`hidden`, `activation`) or **`sindy`** (`libraries[]`
   with `poly` / `fourier` terms; `dZ = Theta(Z) @ Xi`. Loss L1:
   `loss.lambda_l1_ae`, `loss.lambda_l1_ode` (legacy `lambda_l1` → both).
-  Optional `xi_prune_every` / `xi_threshold`: `OdeSindy` buffer
+  Optional JSON `train.xi_prune_every` / `train.xi_threshold`: `OdeSindy`
+ buffer
   `xi_trainable` masks Xi in forward (`prune_xi` shrinks mask); train
   masks grads and zeros frozen storage each step (before save too).
   SINDy export: `eegexpcpp_sindy_csv`, infer
