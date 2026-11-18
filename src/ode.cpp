@@ -13,7 +13,7 @@ OdeImpl::OdeImpl(int64_t latent_dim, const OdeConfig& ode_cfg)
     return;
   }
   if (kind_ == OdeType::Sindy) {
-    sindy_ = OdeSindy(latent_dim, ode_cfg.libraries);
+    sindy_ = OdeSindy(latent_dim, ode_cfg.libraries, ode_cfg.sigma);
     register_module("sindy", sindy_);
     return;
   }

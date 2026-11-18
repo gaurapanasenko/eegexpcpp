@@ -14,7 +14,8 @@ namespace eegexpcpp {
 class OdeSindyImpl : public torch::nn::Module {
  public:
   OdeSindyImpl(int64_t latent_dim,
-               const std::vector<SindyLibraryConfig>& libraries);
+               const std::vector<SindyLibraryConfig>& libraries,
+               double sigma = 0.1);
 
   torch::Tensor forward(torch::Tensor z);
 

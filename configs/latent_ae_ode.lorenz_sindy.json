@@ -10,6 +10,7 @@
     "encoder_activation": "tanh",
     "ode": {
       "type": "sindy",
+      "sigma": 0.1,
       "libraries": [
         {
           "type": "poly",
@@ -29,7 +30,7 @@
     "lambda_dZ": 1.0e-1,
     "lambda_z1": 0.1,
     "lambda_l1_ae": 0,
-    "lambda_l1_ode": 1.0e-1
+    "lambda_l1_ode": 1.0e-3
   },
   "train": {
     "epochs": 10000,

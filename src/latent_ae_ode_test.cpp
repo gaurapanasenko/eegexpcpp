@@ -321,7 +321,8 @@ DOCTEST_TEST_CASE("sindy xi starts at zero") {
   poly.kind = eegexpcpp::SindyLibraryConfig::Kind::Poly;
   poly.poly.degree = 1;
   ocfg.libraries.push_back(poly);
-  eegexpcpp::OdeSindy sindy(2, ocfg.libraries);
+  ocfg.sigma = 0.0;
+  eegexpcpp::OdeSindy sindy(2, ocfg.libraries, ocfg.sigma);
   DOCTEST_CHECK(torch::allclose(sindy->xi_matrix(), torch::zeros({3, 2})));
 }
 

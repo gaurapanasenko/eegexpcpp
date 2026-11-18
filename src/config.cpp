@@ -79,6 +79,10 @@ ExperimentConfig load_config(const std::string& path) {
     if (cfg.model.ode.libraries.empty()) {
       throw std::runtime_error("sindy ode requires non-empty libraries");
     }
+    cfg.model.ode.sigma = jo.value("sigma", cfg.model.ode.sigma);
+    if (cfg.model.ode.sigma < 0.0) {
+      throw std::runtime_error("ode.sigma must be non-negative");
+    }
   } else {
     throw std::runtime_error("unknown ode type: " + ode_type);
   }

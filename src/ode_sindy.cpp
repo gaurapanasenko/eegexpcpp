@@ -7,14 +7,21 @@
 namespace eegexpcpp {
 
 OdeSindyImpl::OdeSindyImpl(int64_t latent_dim,
-                           const std::vector<SindyLibraryConfig>& libraries)
+                           const std::vector<SindyLibraryConfig>& libraries,
+                           double sigma)
     : latent_dim_(latent_dim), library_(latent_dim, libraries) {
   if (latent_dim <= 0) {
     throw std::runtime_error("OdeSindy latent_dim must be positive");
   }
+  if (sigma < 0.0) {
+    throw std::runtime_error("OdeSindy sigma must be non-negative");
+  }
   const int64_t n_features = library_.size();
-  xi_ = register_parameter(
-      "xi", torch::zeros({n_features, latent_dim_}, torch::kFloat32));
+  torch::Tensor xi_init =
+      sigma == 0.0
+          ? torch::zeros({n_features, latent_dim_}, torch::kFloat32)
+          : torch::randn({n_features, latent_dim_}, torch::kFloat32) * sigma;
+  xi_ = register_parameter("xi", std::move(xi_init));
   xi_trainable_ = register_buffer(
       "xi_trainable",
       torch::ones({n_features, latent_dim_}, torch::kFloat32));

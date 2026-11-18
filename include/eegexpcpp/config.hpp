@@ -51,6 +51,8 @@ struct OdeConfig {
   OdeType type = OdeType::Nn;
   OdeNnConfig nn;
   std::vector<SindyLibraryConfig> libraries;
+  /// SINDy only: std dev for Normal init of Xi (0 = zeros).
+  double sigma = 0.1;
 };
 
 struct ModelConfig {

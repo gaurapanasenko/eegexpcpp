@@ -77,7 +77,8 @@ CMake (`FetchContent`, v3.11.3 tarball) on configure.
   from HDF5 group scalars (`load_h5_z_affine`); `dZ_pred` back in norm
   space is `ode(Z_phys)/(X_std+eps)` for decoder JVP. JSON **`model.ode`**:
   **`type`** `nn` (`hidden`, `activation`) or **`sindy`** (`libraries[]`
-  with `poly` / `fourier` terms; `dZ = Theta(Z) @ Xi`. Loss L1:
+  with `poly` / `fourier` terms; `dZ = Theta(Z) @ Xi`; optional `sigma`
+  for Normal Xi init, default `0.1`, `0` = zeros). Loss L1:
   `loss.lambda_l1_ae`, `loss.lambda_l1_ode` (legacy `lambda_l1` → both).
   Optional JSON `train.xi_prune_every` / `train.xi_threshold`: `OdeSindy`
  buffer
