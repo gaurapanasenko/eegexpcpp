@@ -12,8 +12,7 @@
 
 #include "eegexpcpp/config.hpp"
 #include "eegexpcpp/dataset_h5.hpp"
-#include "eegexpcpp/decoder.hpp"
-#include "eegexpcpp/encoder.hpp"
+#include "eegexpcpp/latent_mlp.hpp"
 #include "eegexpcpp/jvp.hpp"
 #include "eegexpcpp/checkpoint.hpp"
 #include "eegexpcpp/latent_ae_ode.hpp"
@@ -100,20 +99,20 @@ DOCTEST_TEST_CASE("encoder jvp") {
   const int64_t f = 4;
   const int64_t l = 3;
   const std::vector<int64_t> enc_hid{8, 8};
-  eegexpcpp::Encoder enc(f, l, enc_hid, "gelu");
+  eegexpcpp::LatentMlp enc(f, l, enc_hid, "gelu");
   auto x = torch::randn({b, t, f}, torch::requires_grad());
   auto dx = torch::randn({b, t, f});
-  auto [z, dz] = enc->forward(x, dx);
+  auto [z, dz] = enc->forward_jvp(x, dx);
   DOCTEST_CHECK(z.sizes() == torch::IntArrayRef({b, t, l}));
   DOCTEST_CHECK(dz.sizes() == torch::IntArrayRef({b, t, l}));
 
-  auto enc_fn = [&](const at::Tensor& xin) { return enc->encode(xin); };
+  auto enc_fn = [&](const at::Tensor& xin) { return enc->forward(xin); };
   auto ref = eegexpcpp::jvp(enc_fn, x, dx).second;
   check_close(dz, ref, 1e-5, 1e-6, "encoder dZ matches JVP");
 
   const double eps = 1e-3;
   auto numeric =
-      (enc->encode(x + eps * dx) - enc->encode(x - eps * dx)) / (2.0 * eps);
+      (enc->forward(x + eps * dx) - enc->forward(x - eps * dx)) / (2.0 * eps);
   check_close(dz, numeric, 1e-2, 1e-3, "encoder dZ vs central difference");
 }
 
@@ -153,8 +152,8 @@ DOCTEST_TEST_CASE("latent forward loss grad") {
 
   check_close(
       losses.at("J_z_1"),
-      torch::mse_loss(out.z.select(2, 0), x.select(2, 0)),
-      1e-6, 1e-7, "J_z_1 equals mse(z[:,:,0], x[:,:,0])");
+      torch::mse_loss(out.z_norm.select(2, 0), x.select(2, 0)),
+      1e-6, 1e-7, "J_z_1 equals mse(z_norm[:,:,0], x[:,:,0])");
 }
 
 DOCTEST_TEST_CASE("timemlp jvp activations") {
@@ -185,13 +184,13 @@ DOCTEST_TEST_CASE("decoder jvp chain") {
   const int64_t f = 5;
   const int64_t l = 3;
   const std::vector<int64_t> dec_hid{12};
-  eegexpcpp::Decoder dec(l, f, dec_hid, "gelu");
+  eegexpcpp::LatentMlp dec(l, f, dec_hid, "gelu");
   auto z = torch::randn({b, t, l}, torch::requires_grad());
   auto dz_pred = torch::randn({b, t, l});
-  auto [y, dy] = dec->forward(z, dz_pred);
+  auto [y, dy] = dec->forward_jvp(z, dz_pred);
   DOCTEST_CHECK(y.sizes() == torch::IntArrayRef({b, t, f}));
   DOCTEST_CHECK(dy.sizes() == torch::IntArrayRef({b, t, f}));
-  auto dec_fn = [&](const at::Tensor& zin) { return dec->decode(zin); };
+  auto dec_fn = [&](const at::Tensor& zin) { return dec->forward(zin); };
   auto ref = eegexpcpp::jvp(dec_fn, z, dz_pred).second;
   check_close(dy, ref, 1e-5, 1e-6, "decoder dY_pred matches JVP");
 }
@@ -214,20 +213,39 @@ DOCTEST_TEST_CASE("h5 loader") {
   std::filesystem::remove(path);
 }
 
-DOCTEST_TEST_CASE("latent z affine broadcast") {
+DOCTEST_TEST_CASE("encoder decoder latent affine") {
+  torch::manual_seed(12);
+  const int64_t b = 1;
+  const int64_t t = 5;
+  const int64_t f = 4;
+  const int64_t l = 3;
+  eegexpcpp::LatentMlp dec(l, f, std::vector<int64_t>{8}, "gelu");
+  auto mean_t = torch::full({1, 1, 1}, 1.0f);
+  auto scale_t = torch::full({1, 1, 1}, 2.0f + 1e-8f);
+  auto z_p = torch::randn({b, t, l});
+  auto z_n = (z_p - mean_t) / scale_t;
+  auto dz_pred = torch::randn({b, t, l});
+  auto [y_n, dy_n] = dec->forward_jvp(z_n, dz_pred);
+  auto dz_phys = dz_pred * scale_t;
+  auto [y_p, dy_p] = dec->forward_jvp(
+      (z_p - mean_t) / scale_t, dz_phys / scale_t);
+  check_close(y_p, y_n, 1e-5, 1e-6, "decode invariant to latent affine");
+  check_close(dy_p, dy_n, 1e-5, 1e-6, "decode dy invariant");
+
   eegexpcpp::ModelConfig mcfg;
-  mcfg.n_latent = 3;
-  mcfg.feature_dim = 5;
+  mcfg.feature_dim = f;
+  mcfg.n_latent = l;
+  mcfg.encoder_hidden = {8};
+  mcfg.decoder_hidden = {8};
+  mcfg.ode.nn.hidden = {6};
   eegexpcpp::LatentAeOde model(mcfg);
   model->set_latent_z_affine(1.0f, 2.0f);
-  const float scale = 2.0f + 1e-8f;
-  auto z = torch::full({1, 4, 3}, 0.5f);
-  check_close(model->latent_z_physical(z),
-              torch::full_like(z, 0.5f * scale + 1.0f), 1e-6, 1e-7,
-              "z_phys = z*scale+mean");
-  auto dz = torch::ones_like(z);
-  check_close(model->latent_dz_physical(dz), torch::full_like(z, scale), 1e-6,
-              1e-7, "dz_phys = dz*scale");
+  auto x = torch::randn({b, t, f});
+  auto dx = torch::randn({b, t, f});
+  auto out = model->forward(x, dx);
+  auto z_round = out.z_norm * model->latent_affine_scale() +
+                 model->latent_affine_mean();
+  check_close(z_round, out.z, 1e-5, 1e-6, "physical z roundtrip");
 }
 
 DOCTEST_TEST_CASE("encoder jvp cuda dx on cpu") {
@@ -239,11 +257,11 @@ DOCTEST_TEST_CASE("encoder jvp cuda dx on cpu") {
   const int64_t t = 4;
   const int64_t f = 3;
   const int64_t l = 2;
-  eegexpcpp::Encoder enc(f, l, std::vector<int64_t>{5}, "gelu");
+  eegexpcpp::LatentMlp enc(f, l, std::vector<int64_t>{5}, "gelu");
   enc->to(torch::kCUDA);
   auto x = torch::randn({b, t, f}, torch::TensorOptions().device(torch::kCUDA));
   auto dx = torch::randn({b, t, f});
-  auto [z, dz] = enc->forward(x, dx);
+  auto [z, dz] = enc->forward_jvp(x, dx);
   DOCTEST_CHECK(z.device().is_cuda());
   DOCTEST_CHECK(dz.device().is_cuda());
 }

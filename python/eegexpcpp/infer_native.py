@@ -94,6 +94,12 @@ class InferSession:
             POINTER(c_float),
         ]
         lib.eegexpcpp_infer_rk4_latent.restype = c_int
+        lib.eegexpcpp_infer_latent_affine.argtypes = [
+            c_void_p,
+            POINTER(c_float),
+            POINTER(c_float),
+        ]
+        lib.eegexpcpp_infer_latent_affine.restype = c_int
         lib.eegexpcpp_infer_ode_is_sindy.argtypes = [c_void_p]
         lib.eegexpcpp_infer_ode_is_sindy.restype = c_int
         lib.eegexpcpp_infer_sindy_csv_size.argtypes = [c_void_p]
@@ -148,6 +154,18 @@ class InferSession:
     def n_latent(self) -> int:
         assert self._handle is not None
         return int(self._lib.eegexpcpp_infer_n_latent(self._handle))
+
+    def latent_affine(self) -> tuple[float, float]:
+        """z_phys = z_norm * scale + mean (training ODE space)."""
+        assert self._handle is not None
+        mean = c_float()
+        scale = c_float()
+        self._check(
+            self._lib.eegexpcpp_infer_latent_affine(
+                self._handle, mean, scale
+            )
+        )
+        return float(mean.value), float(scale.value)
 
     def forward(self, split: SplitName = "train") -> dict[str, np.ndarray]:
         assert self._handle is not None

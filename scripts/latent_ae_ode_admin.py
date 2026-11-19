@@ -164,12 +164,17 @@ def compute_arrays(
     )
     out = session.forward(split_name)
     z = out["z"]
+    z_mean, z_scale = session.latent_affine()
+    z_norm = (z - z_mean) / z_scale
+    z_plot = z
     z_full = rollout_full(z, ode_session, dt_local)
     z_chunk = rollout_chunked(z, ode_session, dt_local, chunk_n)
     return {
         "x": out["x"],
         "y": out["y"],
-        "z": z,
+        "z": z_plot,
+        "z_rk4_base": z,
+        "z_norm": z_norm,
         "z_full": z_full,
         "z_chunk": z_chunk,
         "next_epoch": session.next_epoch,
@@ -201,6 +206,7 @@ st.caption(
 x = data["x"]
 y = data["y"]
 z = data["z"]
+z_norm = data["z_norm"]
 z_full = data["z_full"]
 z_chunk = data["z_chunk"]
 t_axis = np.arange(x.shape[0], dtype=np.float64) / fs
@@ -264,7 +270,11 @@ def _latent_3d_figure(
         title=title,
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        scene=dict(xaxis_title="z0", yaxis_title="z1", zaxis_title="z2"),
+        scene=dict(
+            xaxis_title="z0 (фіз.)",
+            yaxis_title="z1 (фіз.)",
+            zaxis_title="z2 (фіз.)",
+        ),
         height=560,
         margin=dict(t=80),
     )
@@ -304,14 +314,16 @@ with tab_rec:
     st.plotly_chart(fig, width="stretch")
 
     if f_dim >= 1 and z_dim >= 1:
-        err0 = (x[:, 0] - z[:, 0]) ** 2
+        err0 = (x[:, 0] - z_norm[:, 0]) ** 2
         jz1_mse = float(np.mean(err0))
         fig_z0 = go.Figure()
         fig_z0.add_trace(
             go.Scatter(x=t_plot, y=_downsample(x[:, 0]), name="X₀ (оригінал)")
         )
         fig_z0.add_trace(
-            go.Scatter(x=t_plot, y=_downsample(z[:, 0]), name="Z₀ (encoder)")
+            go.Scatter(
+                x=t_plot, y=_downsample(z_norm[:, 0]), name="Z₀ norm (encoder)"
+            )
         )
         fig_z0.update_layout(
             title=f"Z₀ vs X₀ — J_z_1 (MSE по часу) = {jz1_mse:.6g}",
@@ -334,17 +346,21 @@ with tab_3d:
         st.plotly_chart(
             _latent_3d_figure(
                 [
-                    (z, "Z (encoder)", "#636efa", None),
+                    (z, "Z (encoder, фіз.)", "#636efa", None),
                     (z_full, "RK4 (повний)", "#ef553b", None),
                     (z_chunk, "RK4 (шматки)", "#00cc96", chunk_samples),
                 ],
                 (
-                    "Латент 3D (z0–z2) — "
+                    "Латент 3D (фіз. z0–z2) — "
                     f"RMSE full={rmse_full_3d:.6g}, "
                     f"chunk={rmse_chunk_3d:.6g}"
                 ),
             ),
             width="stretch",
+        )
+        st.caption(
+            "Енкодер → фіз. латент (z·σ+μ), ODE і RK4 в тому ж просторі; "
+            "декодер нормує назад для MLP."
         )
 
 with tab_rk4:
@@ -355,7 +371,7 @@ with tab_rk4:
             go.Scatter(
                 x=t_plot,
                 y=_downsample(z[:, d]),
-                name=f"Z{d} true",
+                name=f"Z{d} enc (фіз.)",
                 line=dict(dash="solid"),
             )
         )
@@ -363,14 +379,15 @@ with tab_rk4:
             go.Scatter(
                 x=t_plot,
                 y=_downsample(z_full[:, d]),
-                name=f"Z{d} RK4",
+                name=f"Z{d} RK4 (фіз.)",
                 line=dict(dash="dot"),
             )
         )
     rmse = float(np.sqrt(np.mean((z - z_full) ** 2)))
     fig_r.update_layout(
-        title=f"Z vs RK4 (z0=Z[0]) — RMSE={rmse:.6g}",
+        title=f"Z фіз. vs RK4 (z0=Z[0]·σ+μ) — RMSE={rmse:.6g}",
         xaxis_title="час (с)",
+        yaxis_title="латент (фіз.)",
         height=450,
     )
     st.plotly_chart(fig_r, width="stretch")
@@ -383,14 +400,14 @@ with tab_chunk:
             go.Scatter(
                 x=t_plot,
                 y=_downsample(z[:, d]),
-                name=f"Z{d} true",
+                name=f"Z{d} enc (фіз.)",
             )
         )
         fig_c.add_trace(
             go.Scatter(
                 x=t_plot,
                 y=_downsample(z_chunk[:, d]),
-                name=f"Z{d} RK4 chunk",
+                name=f"Z{d} RK4 chunk (фіз.)",
                 line=dict(dash="dot"),
             )
         )

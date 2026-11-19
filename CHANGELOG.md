@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [draft]
 
+### Changed
+
+- Encoder/decoder merged into shared `LatentMlp`; latent z-score affine
+  only in `LatentAeOde` (`encode_latent` / `decode_latent`).
+- Removed checkpoint `latent_layout` / legacy forward (ODE affine only);
+  old checkpoints trained under layout 1 are not bit-compatible — retrain
+  or resume only from weights saved with the current forward.
+- ODE on physical `Z` in train and infer; dropped duplicate
+  `*_physical` infer/rollout APIs.
+- `ForwardOutput` keeps normalized `z_norm`, `dz_norm`, `dz_pred_norm`;
+  `J_dZ` / `J_z_1` use normalized latent (no extra z-score in loss).
+
 ## [0.7.0] - 2026-11-18
 
 ### Added

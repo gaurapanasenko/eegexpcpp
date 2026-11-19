@@ -1,4 +1,4 @@
-"""RK4 latent rollout using C++ ode_rhs / rk4_latent."""
+"""RK4 latent rollout using C++ ode_rhs / rk4_latent (physical Z)."""
 
 from __future__ import annotations
 
@@ -6,12 +6,8 @@ import numpy as np
 
 from eegexpcpp.calculus import custom_rk4
 
-def _rk4_segment(
-    session: object,
-    u0: np.ndarray,
-    dt: float,
-    n: int,
-) -> np.ndarray:
+
+def _rk4_segment(session: object, u0: np.ndarray, dt: float, n: int) -> np.ndarray:
     rk4 = getattr(session, "rk4_latent", None)
     if rk4 is not None:
         return rk4(np.asarray(u0).reshape(-1), float(dt), int(n))
@@ -25,16 +21,8 @@ def _rk4_segment(
     )
 
 
-def rollout_full(
-    z_true: np.ndarray,
-    session: object,
-    dt: float,
-) -> np.ndarray:
-    """Integrate ode(z) from z_true[0] for T steps (same length as z_true).
-
-    Pass a CPU ``InferSession`` when the main forward uses CUDA (many
-    small ``ode_rhs`` calls).
-    """
+def rollout_full(z_true: np.ndarray, session: object, dt: float) -> np.ndarray:
+    """Integrate ode(z) from z_true[0] for T steps; z in physical latent space."""
     t_len = z_true.shape[0]
     return _rk4_segment(session, z_true[0], dt, t_len)
 

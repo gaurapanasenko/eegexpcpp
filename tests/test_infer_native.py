@@ -57,3 +57,9 @@ def test_infer_forward_shapes(lib_env: None, lorenz_config: Path) -> None:
         np.testing.assert_allclose(
             dz, out["dz_pred"][0], rtol=1e-4, atol=1e-5
         )
+        np.testing.assert_allclose(
+            session.ode_rhs(out["z"][0]),
+            out["dz_pred"][0],
+            rtol=1e-4,
+            atol=1e-5,
+        )

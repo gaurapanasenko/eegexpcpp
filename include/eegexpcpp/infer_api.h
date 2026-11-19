@@ -50,13 +50,18 @@ int eegexpcpp_infer_forward(const EegexpcppInferHandle* handle,
                             float* dz_out,
                             float* dz_pred_out);
 
-/// dz_out = ode(z), vectors length L (n_latent).
+/// dz_out = ode(z); z physical (post-encoder affine), length L (n_latent).
 int eegexpcpp_infer_ode_rhs(const EegexpcppInferHandle* handle,
                             const float* z_in,
                             float* dz_out,
                             int64_t f_dim);
 
-/// RK4 integrate ode(z) from z0 for n_steps with step dt.
+/// HDF5 z-score affine on latent: z = z_norm * scale + mean (μ, σ from HDF5).
+int eegexpcpp_infer_latent_affine(const EegexpcppInferHandle* handle,
+                                  float* mean_out,
+                                  float* scale_out);
+
+/// RK4 integrate ode(z) from z0 for n_steps with step dt (physical z).
 /// z_out row-major float32 [n_steps * n_latent]; z0 length n_latent.
 int eegexpcpp_infer_rk4_latent(const EegexpcppInferHandle* handle,
                                int64_t n_steps,

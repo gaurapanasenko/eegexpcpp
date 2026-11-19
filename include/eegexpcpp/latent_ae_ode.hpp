@@ -5,13 +5,16 @@
 #include <string>
 
 #include "eegexpcpp/config.hpp"
-#include "eegexpcpp/decoder.hpp"
-#include "eegexpcpp/encoder.hpp"
+#include "eegexpcpp/latent_mlp.hpp"
 #include "eegexpcpp/ode.hpp"
 
 namespace eegexpcpp {
 
 struct ForwardOutput {
+  /// MLP latent (normalized); physical copies for ODE / infer export.
+  torch::Tensor z_norm;
+  torch::Tensor dz_norm;
+  torch::Tensor dz_pred_norm;
   torch::Tensor z;
   torch::Tensor dz;
   torch::Tensor dz_pred;
@@ -40,8 +43,11 @@ class LatentAeOdeImpl : public torch::nn::Module {
   /// Match `eegexpcpp.prep.zscore` affine on latent dim (broadcast).
   void set_latent_z_affine(float mean, float std);
 
-  torch::Tensor latent_z_physical(torch::Tensor z) const;
-  torch::Tensor latent_dz_physical(torch::Tensor dz) const;
+  /// Inverse of encoder output affine (for J_z_1 in normalized space).
+  torch::Tensor latent_z_normalized(torch::Tensor z) const;
+
+  float latent_affine_mean() const;
+  float latent_affine_scale() const;
 
   const Ode& ode_module() const { return ode_; }
 
@@ -49,9 +55,9 @@ class LatentAeOdeImpl : public torch::nn::Module {
 
  private:
   int64_t n_latent_{0};
-  Encoder encoder_{nullptr};
+  LatentMlp encoder_{nullptr};
   Ode ode_{nullptr};
-  Decoder decoder_{nullptr};
+  LatentMlp decoder_{nullptr};
   torch::Tensor latent_mean_{torch::zeros({1, 1, 1})};
   torch::Tensor latent_scale_{torch::ones({1, 1, 1})};
 };

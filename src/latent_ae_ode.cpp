@@ -16,6 +16,25 @@ torch::Tensor mse_mean(torch::Tensor a, torch::Tensor b) {
   return torch::mse_loss(a, b, torch::Reduction::Mean);
 }
 
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+encode_latent(LatentMlp& enc,
+              torch::Tensor x,
+              torch::Tensor dx,
+              const torch::Tensor& latent_mean,
+              const torch::Tensor& latent_scale) {
+  auto [z_norm, dz_norm] = enc->forward_jvp(std::move(x), std::move(dx));
+  auto z = z_norm * latent_scale + latent_mean;
+  auto dz = dz_norm * latent_scale;
+  return {z_norm, dz_norm, z, dz};
+}
+
+std::pair<torch::Tensor, torch::Tensor> decode_latent(
+    LatentMlp& dec,
+    torch::Tensor z_norm,
+    torch::Tensor dz_pred_norm) {
+  return dec->forward_jvp(std::move(z_norm), std::move(dz_pred_norm));
+}
+
 }  // namespace
 
 LatentAeOdeImpl::LatentAeOdeImpl(const ModelConfig& model_cfg)
@@ -43,19 +62,26 @@ void LatentAeOdeImpl::set_latent_z_affine(float mean, float std) {
   latent_scale_.fill_(std + kZscoreEps);
 }
 
-torch::Tensor LatentAeOdeImpl::latent_z_physical(torch::Tensor z) const {
-  return z * latent_scale_ + latent_mean_;
+torch::Tensor LatentAeOdeImpl::latent_z_normalized(torch::Tensor z) const {
+  return (std::move(z) - latent_mean_) / latent_scale_;
 }
 
-torch::Tensor LatentAeOdeImpl::latent_dz_physical(torch::Tensor dz) const {
-  return dz * latent_scale_;
+float LatentAeOdeImpl::latent_affine_mean() const {
+  return latent_mean_.reshape({}).item<float>();
+}
+
+float LatentAeOdeImpl::latent_affine_scale() const {
+  return latent_scale_.reshape({}).item<float>();
 }
 
 ForwardOutput LatentAeOdeImpl::forward(torch::Tensor x, torch::Tensor dx) {
   ForwardOutput out;
-  std::tie(out.z, out.dz) = encoder_->forward(x, dx);
+  std::tie(out.z_norm, out.dz_norm, out.z, out.dz) = encode_latent(
+      encoder_, std::move(x), std::move(dx), latent_mean_, latent_scale_);
   out.dz_pred = ode_forward(out.z);
-  std::tie(out.y, out.dy_pred) = decoder_->forward(out.z, out.dz_pred);
+  out.dz_pred_norm = out.dz_pred / latent_scale_;
+  std::tie(out.y, out.dy_pred) =
+      decode_latent(decoder_, out.z_norm, out.dz_pred_norm);
   return out;
 }
 
@@ -67,8 +93,8 @@ std::map<std::string, torch::Tensor> LatentAeOdeImpl::compute_losses(
   std::map<std::string, torch::Tensor> losses;
   losses["J_Y"] = mse_mean(out.y, x);
   losses["J_dY"] = mse_mean(out.dy_pred, dx);
-  losses["J_dZ"] = mse_mean(out.dz_pred, out.dz);
-  losses["J_z_1"] = mse_mean(out.z.select(2, 0), x.select(2, 0));
+  losses["J_dZ"] = mse_mean(out.dz_pred_norm, out.dz_norm);
+  losses["J_z_1"] = mse_mean(out.z_norm.select(2, 0), x.select(2, 0));
   losses["J_reg_ae_l1"] =
       l1_mean_abs(*encoder_) + l1_mean_abs(*decoder_);
   losses["J_reg_ode_l1"] = l1_mean_abs(*ode_);
@@ -76,8 +102,7 @@ std::map<std::string, torch::Tensor> LatentAeOdeImpl::compute_losses(
 }
 
 torch::Tensor LatentAeOdeImpl::ode_forward(torch::Tensor z) {
-  const auto z_phys = latent_z_physical(z);
-  return ode_->forward(z_phys) / latent_scale_;
+  return ode_->forward(std::move(z));
 }
 
 torch::Tensor LatentAeOdeImpl::total_loss(

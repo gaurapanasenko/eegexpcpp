@@ -73,12 +73,15 @@ $$
 
 ## Модулі: позначення
 
-- **Енкодер** $E_\theta$: $\mathbb{R}^F \to \mathbb{R}^L$ (MLP по
-  кожному $t$, загальні ваги).
-- **Декодер** $D_\phi$: $\mathbb{R}^L \to \mathbb{R}^F$.
-- **ODE** $g_\psi$: $\mathbb{R}^L \to \mathbb{R}^L$ — права частина
-  $\dot{\mathbf{z}} = g(\mathbf{z})$ у **фізичних** координатах
-  латенту (див. нижче).
+- **LatentMlp** (підмодулі `encoder`, `decoder`): `TimeMlp` по
+  останній осі на кожному $t$; одна реалізація, різні розміри
+  in/out.
+- **Енкодер** $E_\theta$: $\mathbb{R}^F \to \mathbb{R}^L$ (MLP, потім
+  афін у `encode_latent`).
+- **Декодер** $D_\phi$: $\mathbb{R}^L \to \mathbb{R}^F$ (зворотний
+  афін у `decode_latent`, потім MLP).
+- **ODE** $g_\psi$: $\mathbb{R}^L \to \mathbb{R}^L$ на **фізичному**
+  $\mathbf{Z}$.
 
 Прямий прохід `LatentAeOde::forward` для кожного $(b,t)$:
 
@@ -109,58 +112,62 @@ y = \tanh(x_{\mathrm{pre}}),\quad
 \dot{y} = \dot{x}_{\mathrm{pre}} \odot (1 - y^2).
 $$
 
-**Енкодер** на всьому вікні:
+**Енкодер** (внутрішній MLP, далі афін — наступний розділ):
 
 $$
-\mathbf{Z} = E(\mathbf{X}),
+\tilde{\mathbf{Z}} = E_{\mathrm{mlp}}(\mathbf{X}),
 \qquad
-\mathbf{dZ}_{\mathrm{enc}} =
-\mathrm{JVP}\bigl(E,\, \mathbf{X},\, \mathbf{dX}\bigr).
+\tilde{\mathbf{dZ}}_{\mathrm{enc}} =
+\mathrm{JVP}\bigl(E_{\mathrm{mlp}},\, \mathbf{X},\, \mathbf{dX}\bigr).
 $$
 
-**Декодер** отримує латент і **похідну від ODE**, не від енкодера:
+**Декодер** отримує фізичний латент і **$\mathbf{dZ}_{\mathrm{pred}}$**
+від ODE (не $\tilde{\mathbf{dZ}}_{\mathrm{enc}}$); перед MLP — нормалізація:
 
 $$
-\mathbf{Y} = D(\mathbf{Z}),
+\mathbf{Y} = D_{\mathrm{mlp}}(\tilde{\mathbf{Z}}),
 \qquad
 \mathbf{dY}_{\mathrm{pred}} =
-\mathrm{JVP}\bigl(D,\, \mathbf{Z},\, \mathbf{dZ}_{\mathrm{pred}}\bigr).
+\mathrm{JVP}\bigl(D_{\mathrm{mlp}},\, \tilde{\mathbf{Z}},\,
+\tilde{\mathbf{dZ}}_{\mathrm{pred}}\bigr),
 $$
 
-Це зв’язує реконструкцію швидкостей у просторі ознак із динамікою
-латенту, заданою ODE.
+де $\tilde{\mathbf{Z}}$, $\tilde{\mathbf{dZ}}_{\mathrm{pred}}$ — після
+`decode_latent` (див. нижче).
 
-## Афінне перетворення латенту для ODE
+Це зв’язує реконструкцію швидкостей у просторі ознак із динамікою ODE.
 
-Нормований латент $\mathbf{Z}$ з енкодера; з HDF5 — скаляри
-$\mu_z$, $\sigma_z$ (`load_h5_z_affine` → буфери моделі):
+## Афінне перетворення латенту (HDF5 `X_mean`, `X_std`)
+
+Скаляри $\mu_z$, $\sigma_z+\varepsilon$ (`load_h5_z_affine` → буфери
+`LatentAeOde`). MLP енкодера/декодера працює в **нормованому** латенті;
+на виході енкодера і на вході декодера — афін:
 
 $$
-\mathbf{Z}_{\mathrm{phys}} = \mathbf{Z} \odot (\sigma_z + \varepsilon) + \mu_z,
+\mathbf{Z} = \tilde{\mathbf{Z}} \odot (\sigma_z + \varepsilon) + \mu_z,
 \qquad
-\mathbf{dZ}_{\mathrm{phys}} = \mathbf{dZ} \odot (\sigma_z + \varepsilon).
+\mathbf{dZ} = \tilde{\mathbf{dZ}} \odot (\sigma_z + \varepsilon),
 $$
 
-Передбачення ODE в **нормованому** просторі (як у тензорах навчання):
-
 $$
-\mathbf{dZ}_{\mathrm{pred}} =
-\frac{g_\psi(\mathbf{Z}_{\mathrm{phys}})}{\sigma_z + \varepsilon}.
+\tilde{\mathbf{Z}} = \frac{\mathbf{Z} - \mu_z}{\sigma_z + \varepsilon},
+\qquad
+\tilde{\mathbf{dZ}}_{\mathrm{pred}} =
+\frac{\mathbf{dZ}_{\mathrm{pred}}}{\sigma_z + \varepsilon}
+\quad\text{(декодер)}.
 $$
 
-Так RHS узгоджена з тим, що енкодер і втрати працюють у z-score
-просторі латенту; SINDy на трені використовує фізичні
-$\mathbf{Z}_{\mathrm{phys}}$, $\mathbf{dZ}_{\mathrm{phys}}$ з
-прямого проходу.
+$\mathbf{Z}$, $\mathbf{dZ}$, $\mathbf{dZ}_{\mathrm{pred}}$ у тензорах
+навчання та infer — **фізичні**; ODE бачить саме $\mathbf{Z}$.
 
 ## ODE: нейромережа (`type: nn`)
 
 $$
-\mathbf{dZ}_{\mathrm{phys}} = \mathrm{MLP}(\mathbf{Z}_{\mathrm{phys}}),
+\mathbf{dZ}_{\mathrm{pred}} = g_\psi(\mathbf{Z}),
 $$
 
-де `TimeMlp` — той самий стек `Linear` + активація, що й енкодер/декодер,
-без JVP (лише primal на $\mathbf{Z}_{\mathrm{phys}}$).
+де `TimeMlp` — той самий стек `Linear` + активація, без JVP (primal на
+фізичному $\mathbf{Z}$).
 
 ## ODE: SINDy (`type: sindy`)
 
@@ -176,7 +183,7 @@ $\mathbf{z} \in \mathbb{R}^L$ (рядок на кожну пару $(b,t)$):
 `ode.sindy.xi`):
 
 $$
-\mathbf{dZ}_{\mathrm{phys}} = \Theta(\mathbf{Z}_{\mathrm{phys}})\,\Xi.
+\mathbf{dZ}_{\mathrm{pred}} = \Theta(\mathbf{Z})\,\Xi.
 $$
 
 На початку навчання $\Xi = 0$; оптимізатор оновлює $\Xi$.
@@ -202,14 +209,16 @@ $$
 $$
 \mathcal{J}_{dZ} =
 \frac{1}{BT L}\sum
-\|\mathbf{dZ}_{\mathrm{pred}} - \mathbf{dZ}_{\mathrm{enc}}\|^2,
+\|\tilde{\mathbf{dZ}}_{\mathrm{pred}} -
+\tilde{\mathbf{dZ}}_{\mathrm{enc}}\|^2,
 $$
 $$
 \mathcal{J}_{z_1} =
-\frac{1}{BT}\sum \bigl(Z_{:, :, 0} - X_{:, :, 0}\bigr)^2
+\frac{1}{BT}\sum
+\bigl(\tilde{Z}_{:, :, 0} - X_{:, :, 0}\bigr)^2
 $$
 
-(перша латентна компонента притискається до першої ознаки embedding).
+(нормована перша латентна компонента — до першої ознаки embedding).
 
 L1-регуляризація — середнє $|w|$ по всіх вагах підмодулів:
 
@@ -239,14 +248,16 @@ $$
 
 ## Інференс: RHS і RK4
 
-C API (`eegexpcpp_infer_ode_rhs`, `eegexpcpp_infer_rk4_latent`) для
-стану $\mathbf{z} \in \mathbb{R}^L$ у **тій самій нормованій шкалі**,
-що й $\mathbf{Z}$ з енкодера:
+C API (`eegexpcpp_infer_ode_rhs`, `eegexpcpp_infer_rk4_latent`): $\mathbf{z}$
+у **фізичному** просторі (як $\mathbf{Z}$ після `encode_latent`):
 
 $$
-\mathbf{dz} = \frac{g_\psi\bigl(\mathbf{z} \odot (\sigma_z+\varepsilon) +
-\mu_z\bigr)}{\sigma_z + \varepsilon}.
+\mathbf{dz} = g_\psi(\mathbf{z}).
 $$
+
+`eegexpcpp_infer_latent_affine` повертає $\mu_z$, $\sigma_z+\varepsilon$
+для побудови $\tilde{\mathbf{z}} = (\mathbf{z}-\mu_z)/(\sigma_z+\varepsilon)$
+(візуалізація, не вхід ODE).
 
 Інтегрування **класичним RK4** (`custom_rk4_inplace`) по сітці
 $u_0, u_1, \ldots, u_{n-1}$, $\mathbf{u}_i \in \mathbb{R}^L$:
@@ -266,33 +277,35 @@ $$
 передається в callback (для автономної ODE не використовується всередині
 моделі).
 
-Повний forward інференсу: $\mathbf{Z}, \mathbf{dZ}_{\mathrm{enc}}$ з
-енкодера; $\mathbf{Y}, \mathbf{dY}_{\mathrm{pred}}$ — як у train;
-rollout латенту — RK4 від початкового $\mathbf{z}(t_0)$ уздовж вікна.
+Повний forward інференсу: $\mathbf{Z}, \mathbf{dZ}_{\mathrm{enc}}$ —
+фізичні; $\mathbf{Y}, \mathbf{dY}_{\mathrm{pred}}$ — як у train; RK4 —
+від $\mathbf{z}(t_0)=\mathbf{Z}(t_0)$ у фізичному просторі.
 
 ## Блок-схема одного кроку часу
 
 ```mermaid
 flowchart LR
   X["X, dX"]
-  E["Encoder JVP"]
-  Z["Z, dZ_enc"]
-  AFF["Z_phys"]
+  Emlp["enc: LatentMlp JVP"]
+  Z["Z, dZ_enc (phys)"]
   ODE["ODE g"]
   dZp["dZ_pred"]
-  D["Decoder JVP"]
+  Dnorm["dec: (Z-μ)/σ, dZ/σ"]
+  Dmlp["dec: LatentMlp JVP"]
   Y["Y, dY_pred"]
-  X --> E --> Z
-  Z --> AFF --> ODE --> dZp
-  Z --> D
-  dZp --> D --> Y
+  X --> Emlp --> Z
+  Z --> ODE --> dZp
+  Z --> Dnorm --> Dmlp
+  dZp --> Dnorm
+  Dmlp --> Y
 ```
 
 ## Джерела в репозиторії
 
 | Тема | Файли |
 |------|--------|
-| Прямий прохід, втрати, affine | `src/latent_ae_ode.cpp` |
+| Прямий прохід, affine, втрати | `src/latent_ae_ode.cpp` |
+| LatentMlp | `src/latent_mlp.cpp` |
 | JVP MLP | `src/mlp.cpp` |
 | ODE nn / SINDy | `src/ode.cpp`, `src/ode_sindy.cpp` |
 | Бібліотека $\Theta$ | `src/sindy_library.cpp` |

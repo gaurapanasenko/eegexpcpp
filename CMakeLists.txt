@@ -50,13 +50,12 @@ add_library(
   eegexpcpp_model
   src/mlp.cpp
   src/config.cpp
-  src/encoder.cpp
+  src/latent_mlp.cpp
   src/ode.cpp
   src/ode_sindy.cpp
   src/sindy_library.cpp
   src/sindy_table.cpp
   src/sindy_xi.cpp
-  src/decoder.cpp
   src/latent_ae_ode.cpp
   src/checkpoint.cpp
   src/train_history.cpp

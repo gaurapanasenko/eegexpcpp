@@ -330,6 +330,34 @@ int eegexpcpp_infer_forward(const EegexpcppInferHandle* handle,
   }
 }
 
+int eegexpcpp_infer_latent_affine(const EegexpcppInferHandle* handle,
+                                  float* mean_out,
+                                  float* scale_out) {
+  clear_error();
+  if (handle == nullptr || handle->impl == nullptr) {
+    set_error("null handle");
+    return -1;
+  }
+  if (mean_out == nullptr || scale_out == nullptr) {
+    set_error("null affine output pointer");
+    return -1;
+  }
+  try {
+    auto& s = *handle->impl;
+    const float mean = s.model->latent_affine_mean();
+    const float scale = s.model->latent_affine_scale();
+    *mean_out = mean;
+    *scale_out = scale;
+    return 0;
+  } catch (const c10::Error& e) {
+    set_error(e.what());
+    return -1;
+  } catch (const std::exception& e) {
+    set_error(e.what());
+    return -1;
+  }
+}
+
 int eegexpcpp_infer_ode_rhs(const EegexpcppInferHandle* handle,
                             const float* z_in,
                             float* dz_out,

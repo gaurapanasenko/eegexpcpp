@@ -72,10 +72,10 @@ CMake (`FetchContent`, v3.11.3 tarball) on configure.
   `docs/latent_ae_ode_math.md`.
 - **LatentAeOde:** JSON `model.n_latent`; `feature_dim` from HDF5 at
   build time (`ModelConfig` only to construct). `Z = enc(X)` with
-  `Z.shape[-1]=n_latent`; `dZ` / `dY_pred` via `TimeMlp::forward_jvp`
-  (Linear + gelu/relu/tanh); ODE sees physical `Z*X_std+eps+X_mean`
-  from HDF5 group scalars (`load_h5_z_affine`); `dZ_pred` back in norm
-  space is `ode(Z_phys)/(X_std+eps)` for decoder JVP. JSON **`model.ode`**:
+  `Z.shape[-1]=n_latent`. Shared **`LatentMlp`** (`encoder` / `decoder`
+  modules) wraps `TimeMlp::forward_jvp`; HDF5 `X_mean`/`X_std` affine in
+  `LatentAeOde` (`encode_latent` / `decode_latent`). `ode_forward` on
+  physical `Z`. JSON **`model.ode`**:
   **`type`** `nn` (`hidden`, `activation`) or **`sindy`** (`libraries[]`
   with `poly` / `fourier` terms; `dZ = Theta(Z) @ Xi`; optional `sigma`
   for Normal Xi init, default `0.1`, `0` = zeros). Loss L1:
@@ -89,7 +89,7 @@ CMake (`FetchContent`, v3.11.3 tarball) on configure.
   Tensors **`[B,T,F]`** (HDF5 `[F,T]` transposed on load).
 - **Train:** AdamW, all hyperparameters in JSON (`configs/`). Resume:
   train `[next_epoch, next_epoch + epochs)`; log `epoch=` is cumulative;
-  checkpoint stores `next_epoch` and optional `train_history_*` (metrics
+  checkpoint stores `next_epoch`, optional `train_history_*` (metrics
   tensor `[N,7]` float64, events JSON: run_start with train/loss, xi_prune).
   Same file may hold `best_train` / `best_val` weight snapshots
   (`best_*_J`, `best_*_epoch`); train resume uses latest weights;
@@ -102,7 +102,9 @@ CMake (`FetchContent`, v3.11.3 tarball) on configure.
   Infer/admin use the same layout.
 - Library target `eegexpcpp_model`; shared `libeegexpcpp_infer.so`
   (C API `infer_api.h`, forward + `ode_rhs` + `rk4_latent` for Python
-  ctypes); header `rk4.hpp` (generic RK4, no LibTorch). Binaries
+  ctypes; `latent_affine`; `ode_rhs` / `rk4_latent` on physical `Z`.
+  Admin RK4/3D match training forward.
+  header `rk4.hpp` (generic RK4, no LibTorch). Binaries
   `eegexpcpp` (smoke), `eegexpcpp_train`, `eegexpcpp_test`
   (JVP/loss/HDF5), `eegexpcpp_calculus_test` (RK4; pytest
   `tests/test_calculus_cpp.py`). C++ tests use **doctest** v2.4.11
