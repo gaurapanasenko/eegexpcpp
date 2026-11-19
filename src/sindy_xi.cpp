@@ -1,5 +1,6 @@
 #include "eegexpcpp/sindy_xi.hpp"
 
+#include <limits>
 #include <stdexcept>
 
 namespace eegexpcpp {
@@ -68,6 +69,31 @@ void xi_apply_trainable_mask(torch::Tensor& xi,
                              const torch::Tensor& trainable) {
   xi_clamp_trainable(xi, trainable);
   xi_mask_grad(xi, trainable);
+}
+
+bool xi_prune_weakest(torch::Tensor& xi, torch::Tensor& trainable) {
+  if (xi.sizes() != trainable.sizes()) {
+    throw std::runtime_error("xi trainable mask shape mismatch");
+  }
+  torch::NoGradGuard no_grad;
+  const auto active = trainable > 0;
+  if (!active.any().item<bool>()) {
+    return false;
+  }
+  const auto abs_xi = xi.detach().abs();
+  const auto masked =
+      torch::where(active, abs_xi,
+                   torch::full_like(abs_xi, std::numeric_limits<double>::infinity()));
+  const int64_t flat_idx = masked.view({-1}).argmin().item<int64_t>();
+  auto xi_flat = xi.view({-1});
+  auto trainable_flat = trainable.view({-1});
+  xi_flat[flat_idx] = 0;
+  trainable_flat[flat_idx] = 0;
+  return true;
+}
+
+int64_t xi_count_active(const torch::Tensor& trainable) {
+  return trainable.gt(0).sum().item<int64_t>();
 }
 
 }  // namespace eegexpcpp

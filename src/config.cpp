@@ -131,11 +131,21 @@ ExperimentConfig load_config(const std::string& path) {
   auto& xp = cfg.train.xi_prune;
   xp.prune_every = jt.value("xi_prune_every", xp.prune_every);
   xp.threshold = jt.value("xi_threshold", xp.threshold);
+  xp.weak_prune_every = jt.value("xi_weak_prune_every", xp.weak_prune_every);
+  xp.weak_prune_best_train_j_slack = jt.value(
+      "xi_weak_prune_best_train_j_slack", xp.weak_prune_best_train_j_slack);
   if (xp.prune_every < 0) {
     throw std::runtime_error("xi_prune_every must be non-negative");
   }
+  if (xp.weak_prune_every < 0) {
+    throw std::runtime_error("xi_weak_prune_every must be non-negative");
+  }
   if (xp.threshold < 0.0) {
     throw std::runtime_error("xi_threshold must be non-negative");
+  }
+  if (xp.weak_prune_best_train_j_slack < 1.0) {
+    throw std::runtime_error(
+        "xi_weak_prune_best_train_j_slack must be >= 1");
   }
 
   return cfg;

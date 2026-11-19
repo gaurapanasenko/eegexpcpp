@@ -30,7 +30,12 @@ class OdeSindyImpl : public torch::nn::Module {
   /// Hard-threshold xi_, freeze mask, zero pruned storage.
   void prune_xi(double threshold);
 
+  /// Drop the weakest active xi entry (smallest |xi| among trainable).
+  bool prune_xi_weakest();
+
   int64_t xi_nnz(double threshold) const;
+
+  int64_t xi_active_count() const;
 
   /// Zero gradients on frozen xi entries (after backward).
   void mask_xi_gradient();

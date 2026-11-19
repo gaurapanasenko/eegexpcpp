@@ -143,13 +143,17 @@ int main(int argc, char** argv) {
                     cfg.loss);
 
   const auto& xi_cfg = cfg.train.xi_prune;
-  const bool xi_prune_train = cfg.model.ode.type == eegexpcpp::OdeType::Sindy &&
-                              xi_cfg.prune_every > 0;
+  const bool sindy_train = cfg.model.ode.type == eegexpcpp::OdeType::Sindy;
+  const bool xi_prune_train =
+      sindy_train && xi_cfg.prune_every > 0;
+  const bool xi_weak_prune_train =
+      sindy_train && xi_cfg.weak_prune_every > 0;
+  const bool xi_mask_train = xi_prune_train || xi_weak_prune_train;
 
   std::signal(SIGINT, on_train_sigint);
 
   const auto save_checkpoint = [&](int64_t next_epoch, const char* reason) {
-    if (xi_prune_train) {
+    if (xi_mask_train) {
       model->ode_module()->sindy()->enforce_trainable_mask();
     }
     eegexpcpp::save_train_checkpoint(ckpt_path, model, optimizer, next_epoch,
@@ -173,19 +177,45 @@ int main(int argc, char** argv) {
       torch::nn::utils::clip_grad_norm_(model->parameters(),
                                         cfg.train.grad_clip_norm);
     }
-    if (xi_prune_train) {
+    if (xi_mask_train) {
       model->ode_module()->sindy()->mask_xi_gradient();
     }
     optimizer.step();
-    if (xi_prune_train) {
+    if (xi_mask_train) {
       auto& sindy = model->ode_module()->sindy();
       sindy->enforce_trainable_mask();
-      if (eegexpcpp::xi_prune_due_epoch(epoch, xi_cfg.prune_every)) {
+      if (xi_prune_train &&
+          eegexpcpp::xi_prune_due_epoch(epoch, xi_cfg.prune_every)) {
         torch::NoGradGuard no_grad;
         sindy->prune_xi(xi_cfg.threshold);
         const int64_t nnz = sindy->xi_nnz(xi_cfg.threshold);
         std::cout << "xi_prune epoch=" << epoch << " nnz=" << nnz << '\n';
         history.append_xi_prune(epoch, nnz);
+      }
+      if (xi_weak_prune_train &&
+          eegexpcpp::xi_prune_due_epoch(epoch, xi_cfg.weak_prune_every)) {
+        torch::NoGradGuard no_grad;
+        const bool was_training = model->is_training();
+        model->eval();
+        auto wout = model->forward(x_train, dx_train);
+        auto wlosses =
+            model->compute_losses(wout, x_train, dx_train, cfg.loss);
+        const double train_j_now =
+            model->total_loss(wlosses, cfg.loss).item<double>();
+        if (was_training) {
+          model->train();
+        }
+        const double best_before = bests.best_train_j;
+        if (train_j_now <=
+                best_before * xi_cfg.weak_prune_best_train_j_slack &&
+            sindy->prune_xi_weakest()) {
+          sindy->enforce_trainable_mask();
+          const int64_t nnz = sindy->xi_active_count();
+          std::cout << "xi_weak_prune epoch=" << epoch << " nnz=" << nnz
+                    << " train_J=" << train_j_now
+                    << " best_train_J=" << best_before << '\n';
+          history.append_xi_weak_prune(epoch, nnz, train_j_now, best_before);
+        }
       }
     }
 

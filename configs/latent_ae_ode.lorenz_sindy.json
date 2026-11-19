@@ -43,7 +43,8 @@
     "seed": 43,
     "log_every": 1000,
     "checkpoint_dir": "checkpoints/latent_ae_ode_lorenz_sindy",
-    "xi_prune_every": 5000,
+    "xi_prune_every": 0,
+    "xi_weak_prune_every": 2000,
     "xi_threshold": 0.01
   }
 }

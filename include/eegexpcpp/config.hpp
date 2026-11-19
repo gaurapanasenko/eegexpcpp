@@ -45,6 +45,10 @@ struct SindyXiPruneConfig {
   /// 0 = disabled; else freeze |xi| < threshold every N epochs.
   int64_t prune_every = 0;
   double threshold = 0.1;
+  /// 0 = disabled; every N epochs drop one weakest active xi when train_J
+  /// post-step train_J ≤ weak_prune_best_train_j_slack × best_train_J.
+  int64_t weak_prune_every = 0;
+  double weak_prune_best_train_j_slack = 1.2;
 };
 
 struct OdeConfig {

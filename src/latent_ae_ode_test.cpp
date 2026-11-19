@@ -373,6 +373,32 @@ DOCTEST_TEST_CASE("sindy xi frozen trainable mask") {
   DOCTEST_CHECK(xi.grad()[0][1].item<double>() == doctest::Approx(0.0));
 }
 
+DOCTEST_TEST_CASE("xi prune weakest") {
+  auto xi = torch::tensor({{0.2, 0.05}, {-0.15, 0.3}}, torch::kFloat32);
+  xi.set_requires_grad(true);
+  auto trainable = torch::ones_like(xi);
+  trainable[0][1] = 0;
+  DOCTEST_REQUIRE(eegexpcpp::xi_prune_weakest(xi, trainable));
+  DOCTEST_CHECK(eegexpcpp::xi_count_active(trainable) == 2);
+  DOCTEST_CHECK(xi[0][1].item<double>() == doctest::Approx(0.05));
+  DOCTEST_CHECK(xi[1][0].item<double>() == doctest::Approx(0.0));
+  DOCTEST_CHECK(trainable[1][0].item<double>() == doctest::Approx(0.0));
+}
+
+DOCTEST_TEST_CASE("sindy prune weakest") {
+  eegexpcpp::OdeConfig ocfg;
+  ocfg.type = eegexpcpp::OdeType::Sindy;
+  eegexpcpp::SindyLibraryConfig poly;
+  poly.kind = eegexpcpp::SindyLibraryConfig::Kind::Poly;
+  poly.poly.degree = 1;
+  ocfg.libraries.push_back(poly);
+  eegexpcpp::OdeSindy sindy(2, ocfg.libraries);
+  sindy->set_xi_matrix(torch::tensor({{0.2, 0.01}, {-0.15, 0.3}, {0.0, 0.5}}));
+  DOCTEST_REQUIRE(sindy->prune_xi_weakest());
+  DOCTEST_CHECK(sindy->xi_active_count() == 5);
+  DOCTEST_CHECK(sindy->xi_matrix()[2][0].item<double>() == doctest::Approx(0.0));
+}
+
 DOCTEST_TEST_CASE("sindy prune xi trainable buffer") {
   eegexpcpp::OdeConfig ocfg;
   ocfg.type = eegexpcpp::OdeType::Sindy;

@@ -44,6 +44,11 @@ class TrainHistory {
 
   void append_xi_prune(int64_t epoch, int64_t nnz);
 
+  void append_xi_weak_prune(int64_t epoch,
+                            int64_t nnz,
+                            double train_j,
+                            double best_train_j);
+
   /// Rows already stored from prior checkpoint loads (not including current run).
   int64_t committed_metric_rows() const;
 

@@ -54,8 +54,16 @@ void OdeSindyImpl::prune_xi(double threshold) {
   xi_.mul_(xi_trainable_);
 }
 
+bool OdeSindyImpl::prune_xi_weakest() {
+  return xi_prune_weakest(xi_, xi_trainable_);
+}
+
 int64_t OdeSindyImpl::xi_nnz(double threshold) const {
   return xi_count_nnz(xi_matrix(), threshold);
+}
+
+int64_t OdeSindyImpl::xi_active_count() const {
+  return xi_count_active(xi_trainable_);
 }
 
 void OdeSindyImpl::mask_xi_gradient() {

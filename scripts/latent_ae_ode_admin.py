@@ -489,11 +489,25 @@ with tab_hist:
                     for k in _loss_cols:
                         row[k] = None
                     return row
+                if typ == "xi_weak_prune":
+                    row = {
+                        "type": typ,
+                        "epoch": ev.get("epoch"),
+                        "nnz": ev.get("nnz"),
+                        "train_J": ev.get("train_J"),
+                        "best_train_J": ev.get("best_train_J"),
+                        "lr": None,
+                        "xi_prune_every": None,
+                        "xi_threshold": None,
+                    }
+                    for k in _loss_cols:
+                        row[k] = None
+                    return row
                 return None
 
             rows = [r for ev in hist.events if (r := _event_row(ev)) is not None]
             if rows:
-                st.markdown("**Події (run_start / xi_prune)**")
+                st.markdown("**Події (run_start / xi_prune / xi_weak_prune)**")
                 st.dataframe(rows, width="stretch", hide_index=True)
             with st.expander("Повний JSON подій"):
                 st.json(hist.events)

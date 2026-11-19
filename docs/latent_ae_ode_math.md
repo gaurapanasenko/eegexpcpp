@@ -195,6 +195,11 @@ $k$ коли $(k+1) \bmod N = 0$): `prune_xi` — hard-threshold $\Xi$,
 стиск `xi_trainable`, обнулення зрізаних комірок у параметрі; у forward
 $\Xi \odot m$.
 
+Окремо `xi_weak_prune_every`: та сама сітка епох; після кроку
+оптимізатора, якщо post-step $\mathcal{J}$ на train $\le$
+`xi_weak_prune_best_train_j_slack` $\times$ `best_train_J` (за замовч. 1,2),
+заморожується **одна** активна комірка з найменшим $|\Xi|$.
+
 ## Функція втрат
 
 По всьому вікні — середньоквадратична помилка (MSE, `mean`):

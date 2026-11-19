@@ -38,4 +38,10 @@ void xi_mask_grad(torch::Tensor& xi, const torch::Tensor& trainable);
 void xi_apply_trainable_mask(torch::Tensor& xi,
                              const torch::Tensor& trainable);
 
+/// Freeze the trainable entry with smallest |xi|; false if none active.
+bool xi_prune_weakest(torch::Tensor& xi, torch::Tensor& trainable);
+
+/// Count entries with trainable > 0.
+int64_t xi_count_active(const torch::Tensor& trainable);
+
 }  // namespace eegexpcpp

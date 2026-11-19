@@ -80,9 +80,11 @@ CMake (`FetchContent`, v3.11.3 tarball) on configure.
   with `poly` / `fourier` terms; `dZ = Theta(Z) @ Xi`; optional `sigma`
   for Normal Xi init, default `0.1`, `0` = zeros). Loss L1:
   `loss.lambda_l1_ae`, `loss.lambda_l1_ode` (legacy `lambda_l1` → both).
-  Optional JSON `train.xi_prune_every` / `train.xi_threshold`: `OdeSindy`
- buffer
-  `xi_trainable` masks Xi in forward (`prune_xi` shrinks mask); train
+  Optional JSON `train.xi_prune_every` / `train.xi_threshold`;
+  `train.xi_weak_prune_every` / optional `xi_weak_prune_best_train_j_slack`
+  (default 1.2; weakest xi when post-step train_J ≤ slack×best_train_J):
+  `OdeSindy` buffer `xi_trainable` masks Xi in forward
+  (`prune_xi` / `prune_xi_weakest` shrink mask); train
   masks grads and zeros frozen storage each step (before save too).
   SINDy export: `eegexpcpp_sindy_csv`, infer
   infer `sindy_csv` → Python `csv` parse; admin tab «SINDy Xi».
@@ -90,7 +92,7 @@ CMake (`FetchContent`, v3.11.3 tarball) on configure.
 - **Train:** AdamW, all hyperparameters in JSON (`configs/`). Resume:
   train `[next_epoch, next_epoch + epochs)`; log `epoch=` is cumulative;
   checkpoint stores `next_epoch`, optional `train_history_*` (metrics
-  tensor `[N,7]` float64, events JSON: run_start with train/loss, xi_prune).
+  tensor `[N,7]` float64, events JSON: run_start, xi_prune, xi_weak_prune).
   Same file may hold `best_train` / `best_val` weight snapshots
   (`best_*_J`, `best_*_epoch`); train resume uses latest weights;
   infer `weight_slot` or admin selector can load a snapshot.

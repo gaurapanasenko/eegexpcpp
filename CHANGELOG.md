@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Default weak xi prune slack: post-step train_J ≤ 1.2× `best_train_J`
+  (`train.xi_weak_prune_best_train_j_slack`; was hard-coded 1.03).
+
 - Encoder/decoder merged into shared `LatentMlp`; latent z-score affine
   only in `LatentAeOde` (`encode_latent` / `decode_latent`).
 - Removed checkpoint `latent_layout` / legacy forward (ODE affine only);
@@ -18,6 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `*_physical` infer/rollout APIs.
 - `ForwardOutput` keeps normalized `z_norm`, `dz_norm`, `dz_pred_norm`;
   `J_dZ` / `J_z_1` use normalized latent (no extra z-score in loss).
+
+### Added
+
+- `train.xi_weak_prune_every`: drop one weakest active SINDy `xi` every N
+  epochs when post-step train_J is within slack of checkpoint `best_train_J`;
+  history event `xi_weak_prune`.
 
 ## [0.7.0] - 2026-11-18
 

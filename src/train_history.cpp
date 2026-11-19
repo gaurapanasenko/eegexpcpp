@@ -24,7 +24,10 @@ nlohmann::json train_to_json(const TrainConfig& t) {
                         {"log_every", t.log_every},
                         {"checkpoint_dir", t.checkpoint_dir},
                         {"xi_prune_every", t.xi_prune.prune_every},
-                        {"xi_threshold", t.xi_prune.threshold}};
+                        {"xi_threshold", t.xi_prune.threshold},
+                        {"xi_weak_prune_every", t.xi_prune.weak_prune_every},
+                        {"xi_weak_prune_best_train_j_slack",
+                         t.xi_prune.weak_prune_best_train_j_slack}};
 }
 
 nlohmann::json loss_to_json(const LossConfig& l) {
@@ -150,6 +153,19 @@ void TrainHistory::append_xi_prune(int64_t epoch, int64_t nnz) {
   ev["type"] = "xi_prune";
   ev["epoch"] = epoch;
   ev["nnz"] = nnz;
+  run_event_json_lines_.push_back(ev.dump());
+}
+
+void TrainHistory::append_xi_weak_prune(int64_t epoch,
+                                        int64_t nnz,
+                                        double train_j,
+                                        double best_train_j) {
+  nlohmann::json ev;
+  ev["type"] = "xi_weak_prune";
+  ev["epoch"] = epoch;
+  ev["nnz"] = nnz;
+  ev["train_J"] = train_j;
+  ev["best_train_J"] = best_train_j;
   run_event_json_lines_.push_back(ev.dump());
 }
 
